@@ -1,4 +1,4 @@
-from model.classify_model import MNIST_Classify_Model, DataPreprocessing
+from model.auto_encoder import AutoEncoder, DataPreprocessing
 import numpy as np
 import torch
 import base64
@@ -10,7 +10,7 @@ from fastapi import FastAPI
 device = torch.device('mps')
 SAVED_MODEL_PATH = "./model/model.pth"
 
-CLASSIFY_MODEL = MNIST_Classify_Model().to(device)
+CLASSIFY_MODEL = AutoEncoder().to(device)
 CLASSIFY_MODEL.load_state_dict(torch.load(SAVED_MODEL_PATH))
 
 IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_CHANNEL = 28, 28, 1
@@ -40,6 +40,7 @@ async def predict(request: RequestInput):
 
     prediction = CLASSIFY_MODEL(torch.tensor(request_input).to(device))
     prediction = prediction.cpu().detach().numpy()
-    # prediction = np.argmax(prediction, axis=1)
+    prediction = prediction.reshape(IMAGE_WIDTH, IMAGE_HEIGHT)
+    encoded_prediction = base64.b64encode(prediction)
 
-    return {"prediction": prediction.tolist()}
+    return {"prediction": encoded_prediction}
