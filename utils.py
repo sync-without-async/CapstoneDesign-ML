@@ -26,3 +26,13 @@ def draw_keypoints(outputs, image):
         else:
             continue
     return image
+
+def get_keypoints(outputs, image, threshold=0.9):
+    for i in range(len(outputs[0]['keypoints'])):
+        keypoints = outputs[0]['keypoints'][i].cpu().detach().numpy()
+        if outputs[0]['scores'][i] > threshold:
+            keypoints = keypoints[:, :].reshape(-1, 3)
+            return keypoints
+        else:
+            continue
+    return None
