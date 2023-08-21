@@ -18,6 +18,3 @@ def main():
     video_path = "videos/webm/ec07c4c7eb818d6c.webm"
     video = webm_to_array(video_path)
     print(video.shape)
-
-if __name__ == "__main__":
-    main()
