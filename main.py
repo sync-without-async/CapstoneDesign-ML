@@ -19,13 +19,13 @@ async def root():
     return {"message": "Hello World"}
 
 @app.get("/videoRegister")
-async def registerVideo(video_file: UploadFile = File(...)):
+async def registerVideo(video_file: UploadFile = File(...), score_threshold: float = 0.8):
     video = video_file.file.read()
     video = io.BytesIO(video)
     with open(DUMMY_VIDEO_FILE_NAME, "wb") as f: f.write(video.read())
 
     video_tensor = cv2.VideoCapture(DUMMY_VIDEO_FILE_NAME)
-    skeletons = extractor.extract(video_tensor, score_threshold=0.5)
+    skeletons = extractor.extract(video_tensor, score_threshold=score_threshold)
 
     if skeletons == "NO SKELETONS FOUND":
         return {"error": "No skeletons found"}

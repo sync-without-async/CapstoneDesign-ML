@@ -81,8 +81,10 @@ class SkeletonExtractor:
 
             keypoints = utils.get_keypoints(outputs, score_threshold)
 
-            if keypoints == None:   extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
-            else:                   extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
+            if keypoints == "NO SKELETONS FOUND":
+                extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
+            else:
+                extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
 
             fps = 1.0 / inference_time
             total_fps += fps

@@ -31,7 +31,7 @@ def get_keypoints(outputs, threshold=0.9):
     try:
         outputs[0]['keypoints']
     except KeyError:
-        return None
+        return "NO SKELETONS FOUND"
 
     for i in range(len(outputs[0]['keypoints'])):
         keypoints = outputs[0]['keypoints'][i].cpu().detach().numpy()
@@ -40,4 +40,4 @@ def get_keypoints(outputs, threshold=0.9):
             return keypoints
         else:
             continue
-    return None
+    return "NO SKELETONS FOUND"
