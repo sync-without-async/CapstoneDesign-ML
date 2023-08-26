@@ -41,7 +41,7 @@ class SkeletonExtractor:
         self.model = models.detection.keypointrcnn_resnet50_fpn(weight=self.pretrained_bool, num_keypoints=self.number_of_keypoints)
         self.model.to(self.device).eval()
 
-    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9) -> list:
+    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9) -> dict:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
 
         Args:
