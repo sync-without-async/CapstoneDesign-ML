@@ -38,7 +38,7 @@ class SkeletonExtractor:
         if self.device not in ['cpu', 'cuda']:
             raise ValueError(f"Invalid device: {self.device}")
         
-        self.model = models.detection.keypointrcnn_resnet50_fpn(pretrained=self.pretrained_bool, num_keypoints=self.number_of_keypoints)
+        self.model = models.detection.keypointrcnn_resnet50_fpn(weight=self.pretrained_bool, num_keypoints=self.number_of_keypoints)
         self.model.to(self.device).eval()
 
     def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9) -> list:
@@ -58,38 +58,31 @@ class SkeletonExtractor:
             >>> skeletons = extractor.extract(video)
             >>> print(skeletons)"""
         total_fps, frame_count = 0., 0.
-        extracted_skeletons = []
+        extracted_skeletons = self.__extract_keypoint_mapping({})
         pbar = tqdm(desc=f"Extracting skeletons from video", total=int(video_tensor.get(cv2.CAP_PROP_FRAME_COUNT)), unit="frames")
 
         while True:
             ret, frame = video_tensor.read()
             if not ret: break
 
+            # Converts the frame from BGR to RGB and normalizes the values to be between 0 and 1
             frame_from_video = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame_from_video = np.array(frame, dtype=np.float64) / 255.0
+
+            # Transforms the frame into a tensor (1, 3, height, width)
             frame_from_video = torch.from_numpy(frame_from_video).permute(2, 0, 1)
             frame_from_video = frame_from_video.unsqueeze(0).float().to(self.device)
 
+            # Runs the model on the frame and gets the keypoints
             start_time = time.time()
             with torch.no_grad():
-                outputs = self.model(frame_from_video)[0]
+                outputs = self.model(frame_from_video)
             inference_time = time.time() - start_time
 
-            # try:                keypoints = utils.get_keypoints(outputs, score_threshold)
-            # except KeyError:    return "NO SKELETONS FOUND"
-
-            # try:
-            #     keypoints = utils.get_keypoints(outputs, score_threshold)
-            #     extracted_skeletons.append(keypoints)
-            # except KeyError:
-            #     extracted_skeletons.append(None)     
-
             keypoints = utils.get_keypoints(outputs, score_threshold)
-            if keypoints is not None:
-                extracted_skeletons.append(keypoints)
-            else:
-                plt.imshow(frame_from_video)
-                plt.show()
+
+            if keypoints == None:   extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
+            else:                   extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
 
             fps = 1.0 / inference_time
             total_fps += fps
@@ -99,3 +92,113 @@ class SkeletonExtractor:
         pbar.close()
 
         return extracted_skeletons
+
+    def __add_none_keypoints(self, input_mapping: dict) -> dict:
+        """Adds None keypoints to the input mapping.
+        Keypoints are indexed from 0 to 16. The index number corresponds to the index of the keypoint in the list of keypoints.
+
+        Args:
+            input_mapping (dict): The input mapping to add the None keypoints to.
+
+        Returns:
+            dict: The input mapping with the None keypoints added."""
+        for idx in range(17):
+            input_mapping[self.__return_keypoint_name_from_index(idx)].append((None, None))
+        return input_mapping
+
+    def __add_keypoints(self, keypoints: list, input_mapping: dict) -> dict:
+        """Adds the keypoints to the input mapping.
+        Keypoints are indexed from 0 to 16. The index number corresponds to the index of the keypoint in the list of keypoints.
+        
+        Args:
+            keypoints (list): The list of keypoints to add to the input mapping.
+            input_mapping (dict): The input mapping to add the keypoints to.
+            
+        Returns:
+            dict: The input mapping with the keypoints added."""
+        for idx in range(len(keypoints)):
+            x, y = keypoints[idx][0], keypoints[idx][1]
+            input_mapping[self.__return_keypoint_name_from_index(idx)].append((x.item(), y.item()))
+        return input_mapping
+
+    def __extract_keypoint_mapping(self, input_mapping: dict) -> dict:
+        """Returns a dictionary with the keypoint names as keys and empty lists as values.
+        Keypoints are indexed from 0 to 16. The index number corresponds to the index of the keypoint in the list of keypoints.
+        Keypoint names are as follows:
+            0: 'nose',
+            1: 'left_eye',
+            2: 'right_eye',
+            3: 'left_ear',
+            4: 'right_ear',
+            5: 'left_shoulder',
+            6: 'right_shoulder',
+            7: 'left_elbow',
+            8: 'right_elbow',
+            9: 'left_wrist',
+            10: 'right_wrist',
+            11: 'left_hip',
+            12: 'right_hip',
+            13: 'left_knee',
+            14: 'right_knee',
+            15: 'left_ankle',
+            16: 'right_ankle',
+            
+        Args:
+            input_mapping (dict): The input dictionary to add the keypoint names to.
+            
+        Returns:
+            dict: The input dictionary with the keypoint names added."""
+        keypoint_names = {
+            0: 'nose',
+            1: 'left_eye',
+            2: 'right_eye',
+            3: 'left_ear', 
+            4: 'right_ear', 
+            5: 'left_shoulder', 
+            6: 'right_shoulder',
+            7: 'left_elbow', 
+            8: 'right_elbow',
+            9: 'left_wrist', 
+            10: 'right_wrist',
+            11: 'left_hip', 
+            12: 'right_hip',
+            13: 'left_knee', 
+            14: 'right_knee',
+            15: 'left_ankle', 
+            16: 'right_ankle',
+        }
+
+        for key in keypoint_names.keys():
+            input_mapping[keypoint_names[key]] = []
+
+        return input_mapping
+    
+    def __return_keypoint_name_from_index(self, index_number: int) -> str:
+        """Returns the name of the keypoint from the index number.
+        Keypoints are indexed from 0 to 16. The index number corresponds to the index of the keypoint in the list of keypoints.
+        
+        Args:
+            index_number (int): The index number of the keypoint.
+            
+        Returns:
+            str: The name of the keypoint."""
+        keypoint_names = {
+            0: 'nose',
+            1: 'left_eye',
+            2: 'right_eye',
+            3: 'left_ear', 
+            4: 'right_ear', 
+            5: 'left_shoulder', 
+            6: 'right_shoulder',
+            7: 'left_elbow', 
+            8: 'right_elbow',
+            9: 'left_wrist', 
+            10: 'right_wrist',
+            11: 'left_hip', 
+            12: 'right_hip',
+            13: 'left_knee', 
+            14: 'right_knee',
+            15: 'left_ankle', 
+            16: 'right_ankle',
+        }
+        return keypoint_names[index_number]

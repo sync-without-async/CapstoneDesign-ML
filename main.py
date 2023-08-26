@@ -18,16 +18,16 @@ extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, devi
 async def root():
     return {"message": "Hello World"}
 
-@app.get("/registerVideo")
+@app.get("/videoRegister")
 async def registerVideo(video_file: UploadFile = File(...)):
     video = video_file.file.read()
     video = io.BytesIO(video)
     with open(DUMMY_VIDEO_FILE_NAME, "wb") as f: f.write(video.read())
 
     video_tensor = cv2.VideoCapture(DUMMY_VIDEO_FILE_NAME)
-    skeletons = extractor.extract(video_tensor)
+    skeletons = extractor.extract(video_tensor, score_threshold=0.5)
 
-    if skeletons is "NO SKELETONS FOUND":
+    if skeletons == "NO SKELETONS FOUND":
         return {"error": "No skeletons found"}
 
     return {"skeletons": skeletons}
