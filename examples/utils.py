@@ -27,12 +27,7 @@ def draw_keypoints(outputs, image):
             continue
     return image
 
-def get_keypoints(outputs, threshold=0.9):
-    try:
-        outputs[0]['keypoints']
-    except KeyError:
-        return "NO SKELETONS FOUND"
-
+def get_keypoints(outputs, image, threshold=0.9):
     for i in range(len(outputs[0]['keypoints'])):
         keypoints = outputs[0]['keypoints'][i].cpu().detach().numpy()
         if outputs[0]['scores'][i] > threshold:
@@ -40,4 +35,4 @@ def get_keypoints(outputs, threshold=0.9):
             return keypoints
         else:
             continue
-    return "NO SKELETONS FOUND"
+    return None
