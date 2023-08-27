@@ -8,6 +8,7 @@ import utils
 import time
 import cv2
 import io
+import os
 
 class SkeletonExtractor:
     def __init__(
@@ -36,9 +37,12 @@ class SkeletonExtractor:
         self.pretrained_bool = pretrained_bool
         self.number_of_keypoints = number_of_keypoints
         self.device = device
-        if self.device not in ['cpu', 'cuda']:
+        if self.device not in ['cpu', 'cuda', 'mps']:
             raise ValueError(f"Invalid device: {self.device}")
         
+        if self.device == 'mps':
+            os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+
         self.model = models.detection.keypointrcnn_resnet50_fpn(weight=self.pretrained_bool, num_keypoints=self.number_of_keypoints)
         self.model.to(self.device).eval()
 
@@ -216,5 +220,6 @@ class DataPreprocessing:
         with open(temp_video_file_path, "wb") as f: f.write(video.read())
 
         video = cv2.VideoCapture(temp_video_file_path)
+        video_length = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        return video
+        return video, video_length
