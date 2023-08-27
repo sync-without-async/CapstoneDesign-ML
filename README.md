@@ -4,3 +4,8 @@
 
 모델은 Pre-trained된 모델을 사용하였습니다. Baseline Model은 Posenet을 활용하고 있으며 Communication Overhead와 Computation Overhead의 Trade-off 등을 통해서 이는 변경될 수 있습니다.
 
+## Our Model
+
+Pytorch의 `torchvision.models` 모듈에서는 여러 Pretrained 모델과 SOTA 모델 구조들을 제공합니다. 우리는 선행학습된 사람의 모습을 추출하는 것이 중요하므로 Keypoint 추출이 가능한 Keypoint RCNN ResNet50 FPN 기반 모델을 사용하였습니다. Keypoint R-CNN + ResNet50 FPN 의 구조라고 이해하면 쉬울 거 같네요.
+
+[공식 문서](https://pytorch.org/vision/stable/models/generated/torchvision.models.detection.keypointrcnn_resnet50_fpn.html#torchvision.models.detection.keypointrcnn_resnet50_fpn)에 따르면 default weight는 COCO Dataset v1로 학습된 모델로 기존 Legacy 모델보다 더 많은 Parameter를 지녔지만 GFLOPs는 떨어졌으며 성능도 개선된 모델입니다.

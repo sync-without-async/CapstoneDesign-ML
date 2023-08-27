@@ -1,12 +1,13 @@
 from tqdm import tqdm
 
 import torchvision.models as models
-import matplotlib.pyplot as plt
+import skvideo.io as skvideo
 import numpy as np
 import torch
 import utils
 import time
 import cv2
+import io
 
 class SkeletonExtractor:
     def __init__(
@@ -105,7 +106,7 @@ class SkeletonExtractor:
         Returns:
             dict: The input mapping with the None keypoints added."""
         for idx in range(17):
-            input_mapping[self.__return_keypoint_name_from_index(idx)].append((None, None))
+            input_mapping[self.__return_keypoint_name_from_index(idx)].append((0, 0))
         return input_mapping
 
     def __add_keypoints(self, keypoints: list, input_mapping: dict) -> dict:
@@ -204,3 +205,16 @@ class SkeletonExtractor:
             16: 'right_ankle',
         }
         return keypoint_names[index_number]
+    
+class DataPreprocessing:
+    def __init__(self):
+        pass
+
+    def processing(self, video_file, temp_video_file_path: str = "temp.webm"):
+        video = video_file.file.read()
+        video = io.BytesIO(video)
+        with open(temp_video_file_path, "wb") as f: f.write(video.read())
+
+        video = cv2.VideoCapture(temp_video_file_path)
+
+        return video
