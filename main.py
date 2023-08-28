@@ -29,9 +29,26 @@ os.system("export PYTORCH_ENABLE_MPS_FALLBACK=1")
 async def validation_exception_handler(request, exc):
     return PlainTextResponse(str(exc), status_code=400)
 
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    return PlainTextResponse(str(exc.detail), status_code=exc.status_code)
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request, exc):
+    return PlainTextResponse(str(exc), status_code=500)
 
 @app.get("/videoRegister")
 async def registerVideo(video_file: UploadFile = File(...)):
+    """On this function, we will extract the skeleton from the video that the consumer wants to follow.
+    And then, we will save the skeleton as a JSON file. The JSON file will be saved in the database, CRUD not work on our layer (AI layer).
+    After saved the data on the database, we will return the skeleton and the video length to the consumer.
+
+    Args:
+        video_file (UploadFile, optional): The video file that the consumer wants to follow. Defaults to File(...).
+
+    Returns:
+        skeletons(json, dict) : The skeleton and the video length.
+        video_length(int) : The video length."""
     print(f"[INFO/REGISTER] Video register request has been received.")
     print(f"[INFO/REGISTER] Extractor threshold: {EXTRACTOR_THRESHOLD}")
 
@@ -41,10 +58,7 @@ async def registerVideo(video_file: UploadFile = File(...)):
     print(f"[INFO/REGISTER] Video length: {video_length}")
     with open("dummy_skeletons.json", "w") as f: json.dump(skeletons, f)
 
-    return {
-        "skeletons": skeletons,
-        "video_length": video_length,
-    }
+    return {"skeletons": skeletons, "video_length": video_length}
 
 @app.get("/getMetricsConsumer")
 async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
