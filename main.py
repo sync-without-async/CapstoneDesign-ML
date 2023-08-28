@@ -10,14 +10,13 @@ import matplotlib.pyplot as plt
 import skvideo.io as skvideo
 import numpy as np
 import json
-import cv2
 import os
 
 DUMMY_VIDEO_FILE_NAME = "dummy.webm"
-EXTRACTOR_THRESHOLD = 0.7
+EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cpu')
 preprocessor = DataPreprocessing()
 bytes_io = BytesIO()
 
