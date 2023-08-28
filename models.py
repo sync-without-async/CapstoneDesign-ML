@@ -1,12 +1,16 @@
+from torchvision.models.detection import KeypointRCNN_ResNet50_FPN_Weights
+
 from tqdm import tqdm
 
 import torchvision.models as models
 import matplotlib.pyplot as plt
+import skvideo.io as skvideo
 import numpy as np
 import torch
 import utils
 import time
 import cv2
+import os
 
 class SkeletonExtractor:
     def __init__(
@@ -35,13 +39,17 @@ class SkeletonExtractor:
         self.pretrained_bool = pretrained_bool
         self.number_of_keypoints = number_of_keypoints
         self.device = device
-        if self.device not in ['cpu', 'cuda']:
+        if self.device not in ['cpu', 'cuda', 'mps']:
             raise ValueError(f"Invalid device: {self.device}")
         
-        self.model = models.detection.keypointrcnn_resnet50_fpn(weight=self.pretrained_bool, num_keypoints=self.number_of_keypoints)
+        self.model = models.detection.keypointrcnn_resnet50_fpn(
+            pretrained=self.pretrained_bool,
+            num_keypoints=self.number_of_keypoints, 
+            progress=False
+        )
         self.model.to(self.device).eval()
-
-    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9) -> list:
+    
+    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9) -> dict:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
 
         Args:
@@ -59,19 +67,18 @@ class SkeletonExtractor:
             >>> print(skeletons)"""
         total_fps, frame_count = 0., 0.
         extracted_skeletons = self.__extract_keypoint_mapping({})
-        pbar = tqdm(desc=f"Extracting skeletons from video", total=int(video_tensor.get(cv2.CAP_PROP_FRAME_COUNT)), unit="frames")
+        video_length = int(video_tensor.get(cv2.CAP_PROP_FRAME_COUNT))
+        pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
 
         while True:
             ret, frame = video_tensor.read()
             if not ret: break
-
-            # Converts the frame from BGR to RGB and normalizes the values to be between 0 and 1
-            frame_from_video = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_from_video = np.array(frame, dtype=np.float64) / 255.0
-
-            # Transforms the frame into a tensor (1, 3, height, width)
-            frame_from_video = torch.from_numpy(frame_from_video).permute(2, 0, 1)
-            frame_from_video = frame_from_video.unsqueeze(0).float().to(self.device)
+            
+            # Preprocesses the frame
+            frame_from_video = np.array(frame, dtype=np.float32) / 255.0
+            frame_from_video = torch.Tensor(frame_from_video).permute(2, 0, 1)
+            frame_from_video = frame_from_video.unsqueeze(0)
+            frame_from_video = frame_from_video.float().to(self.device)
 
             # Runs the model on the frame and gets the keypoints
             start_time = time.time()
@@ -79,21 +86,28 @@ class SkeletonExtractor:
                 outputs = self.model(frame_from_video)
             inference_time = time.time() - start_time
 
-            keypoints = utils.get_keypoints(outputs, score_threshold)
+            # Gets the keypoints from the outputs
+            keypoints = utils.get_keypoints(outputs, None, threshold=score_threshold)
+            output_image = utils.draw_keypoints(outputs, frame)
 
-            if keypoints == "NO SKELETONS FOUND":
-                extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
-            else:
+            try:
                 extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
-
+            except:
+                extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
+            
             fps = 1.0 / inference_time
             total_fps += fps
             frame_count += 1
+
             pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}"})
             pbar.update(1)
-        pbar.close()
 
-        return extracted_skeletons
+            cv2.imshow("Output", output_image)
+            if cv2.waitKey(1) & 0xFF == ord('q'): break
+        pbar.close()
+        cv2.destroyAllWindows()
+
+        return extracted_skeletons, frame_count
 
     def __add_none_keypoints(self, input_mapping: dict) -> dict:
         """Adds None keypoints to the input mapping.
@@ -105,7 +119,7 @@ class SkeletonExtractor:
         Returns:
             dict: The input mapping with the None keypoints added."""
         for idx in range(17):
-            input_mapping[self.__return_keypoint_name_from_index(idx)].append((None, None))
+            input_mapping[self.__return_keypoint_name_from_index(idx)].append((0, 0))
         return input_mapping
 
     def __add_keypoints(self, keypoints: list, input_mapping: dict) -> dict:
@@ -204,3 +218,55 @@ class SkeletonExtractor:
             16: 'right_ankle',
         }
         return keypoint_names[index_number]
+    
+class DataPreprocessing:
+    def __save_and_read_video_file(self, video, temp_video_file_path):
+        with open(temp_video_file_path, "wb+") as f:
+            for chunk in video.file: f.write(chunk)
+        video = cv2.VideoCapture(temp_video_file_path)
+        os.remove(temp_video_file_path)
+
+        return video
+
+    def processing(self, video_file, temp_video_file_path: str = "temp.webm"):
+        """Processes the video file and returns the video tensor.
+        Save the video file to the temp_video_file_path and read it. Then, convert it to the video tensor.
+        
+        Args:
+            video_file (UploadFile): The video file to process.
+            temp_video_file_path (str, optional): The path to save the video file to. Defaults to "temp.webm".
+            
+        Returns:
+            torch.Tensor: The video tensor."""
+        file_ext = video_file.filename.split(".")[-1]
+        file_ext = temp_video_file_path.split(".")[0] + "." + file_ext
+        video = self.__save_and_read_video_file(video_file, file_ext)
+        return video
+
+class Metrics:
+    def __jaccard_score(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        """Returns the jaccard score of the two arrays.
+        The jaccard score is calculated as follows:
+            jaccard_score = (y_true & y_pred).sum() / (y_true | y_pred).sum()
+
+        Args:
+            y_true (np.ndarray): The ground truth array.
+            y_pred (np.ndarray): The predicted array.
+
+        Returns:
+            float: The jaccard score of the two arrays."""
+        y_true, y_pred = y_true.tolist(), y_pred.tolist() 
+        return np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
+
+    def score(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        """Returns the score of the two arrays.
+        The score is calculated as follows:
+            score = jaccard_score(y_true, y_pred)
+            
+        Args:
+            y_true (np.ndarray): The ground truth array.
+            y_pred (np.ndarray): The predicted array.
+            
+        Returns:
+            float: The score of the two arrays."""
+        return self.__jaccard_score(y_true, y_pred)
