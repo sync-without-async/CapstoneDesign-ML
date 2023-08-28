@@ -4,6 +4,7 @@ import time
 
 from datetime import datetime
 from tqdm import tqdm
+import polars as pl
 
 def database_connector(database_secret_path: str = "database_secret.json") -> tuple:
     with open(database_secret_path, "r") as f:
@@ -30,4 +31,6 @@ def database_query(
     result = cursor.fetchall()
     if verbose:
         print(result)
+
+    result = pl.DataFrame(result)
     return result
