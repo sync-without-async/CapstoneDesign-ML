@@ -7,10 +7,10 @@ edges = [
     (12, 14), (14, 16), (5, 6)
 ]
 
-def draw_keypoints(outputs, image):
+def draw_keypoints(outputs, image, threshold=0.9):
     for i in range(len(outputs[0]['keypoints'])):
         keypoints = outputs[0]['keypoints'][i].cpu().detach().numpy()
-        if outputs[0]['scores'][i] > 0.9:
+        if outputs[0]['scores'][i] > threshold:
             keypoints = keypoints[:, :].reshape(-1, 3)
             for p in range(keypoints.shape[0]):
                 cv2.circle(image, (int(keypoints[p, 0]), int(keypoints[p, 1])), 10, (255, 0, 0), thickness=-1, lineType=cv2.FILLED)

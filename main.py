@@ -4,18 +4,22 @@ from models import SkeletonExtractor, DataPreprocessing
 
 from connector import database_connector, database_query
 from fastapi import FastAPI, File, UploadFile
+from io import BytesIO
 
+import matplotlib.pyplot as plt
+import skvideo.io as skvideo
 import numpy as np
 import json
 import cv2
 import os
 
 DUMMY_VIDEO_FILE_NAME = "dummy.webm"
-EXTRACTOR_THRESHOLD = 0.0
+EXTRACTOR_THRESHOLD = 0.7
 
 app = FastAPI()
 extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
 preprocessor = DataPreprocessing()
+bytes_io = BytesIO()
 
 os.system("export PYTORCH_ENABLE_MPS_FALLBACK=1")
 
@@ -65,3 +69,17 @@ async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
     metrics = jaccard_score(guide_skeleton_values, consumer_skeleton_values, average='micro')
 
     return {"metrics": metrics}
+
+@app.get("/UploadVideo") 
+async def uploadVideo(video_file: UploadFile = File(...)):
+    # bytes_io.write(video_file.file.read())
+    # with open("dummy.mp4", "wb") as f:
+    #     f.write(bytes_io.getbuffer())
+
+    with open("dummy.webm", "wb") as f:
+        f.write(video_file.file.read())
+
+    video = skvideo.vread("dummy.webm")
+    for idx in range(len(video)):
+        plt.imshow(video[idx])
+        plt.show()

@@ -3,9 +3,9 @@ from torchvision.models.detection import KeypointRCNN_ResNet50_FPN_Weights
 from tqdm import tqdm
 
 import torchvision.models as models
+import matplotlib.pyplot as plt
 import skvideo.io as skvideo
 import numpy as np
-import aiofiles
 import torch
 import utils
 import time
@@ -42,10 +42,20 @@ class SkeletonExtractor:
         if self.device not in ['cpu', 'cuda', 'mps']:
             raise ValueError(f"Invalid device: {self.device}")
         
-        self.model = models.detection.keypointrcnn_resnet50_fpn(weight=KeypointRCNN_ResNet50_FPN_Weights.COCO_LEGACY, num_keypoints=self.number_of_keypoints)
+        self.model = models.detection.keypointrcnn_resnet50_fpn(weight=KeypointRCNN_ResNet50_FPN_Weights.COCO_LEGACY, num_keypoints=self.number_of_keypoints, progress=False)
         self.model.to(self.device).eval()
 
-    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9) -> dict:
+    def __preprocessing_image(self, image: np.ndarray) -> torch.Tensor:
+        image_width, image_height, image_channels = image.shape
+
+        image = np.array(image, dtype=np.float32) / 255.0
+        image = image.reshape(1, image_channels, image_width, image_height)
+        image = torch.from_numpy(image)
+        image = image.to(self.device)
+
+        return image
+    
+    def extract(self, video_tensor: np.ndarray, score_threshold: float = 0.9) -> dict:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
 
         Args:
@@ -67,13 +77,8 @@ class SkeletonExtractor:
         pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
 
         for frame in video_tensor:
-            # Converts the frame to RGB and normalizes it
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = np.array(frame, dtype=np.float64) / 255.0
-
-            # Converts the frame to a tensor, and moves it to the device
-            frame_from_video = torch.Tensor(frame).permute(2, 0, 1)
-            frame_from_video = frame_from_video.unsqueeze(0).to(self.device)
+            # Preprocesses the frame
+            frame_from_video = self.__preprocessing_image(frame)
 
             # Runs the model on the frame and gets the keypoints
             start_time = time.time()
@@ -81,15 +86,17 @@ class SkeletonExtractor:
                 outputs = self.model(frame_from_video)
             inference_time = time.time() - start_time
 
+            print(outputs)
+
             # Gets the keypoints from the outputs
-            keypoints = utils.get_keypoints(outputs, score_threshold)
+            keypoints = utils.get_keypoints(outputs, threshold=score_threshold)
+            output_image = utils.draw_keypoints(outputs, frame, threshold=score_threshold)
             extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
             
-            output_image = utils.draw_keypoints(outputs, frame)
-
             fps = 1.0 / inference_time
             total_fps += fps
             frame_count += 1
+
             pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}"})
             pbar.update(1)
 
@@ -220,5 +227,7 @@ class DataPreprocessing:
         return video
 
     def processing(self, video_file, temp_video_file_path: str = "temp.webm"):
-        video = self.__save_and_read_video_file(video_file, temp_video_file_path)
+        file_ext = video_file.filename.split(".")[-1]
+        file_ext = temp_video_file_path.split(".")[0] + "." + file_ext
+        video = self.__save_and_read_video_file(video_file, file_ext)
         return video
