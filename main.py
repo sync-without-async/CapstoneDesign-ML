@@ -7,26 +7,28 @@ from fastapi import FastAPI, File, UploadFile
 
 import numpy as np
 import json
+import cv2
 import os
 
 DUMMY_VIDEO_FILE_NAME = "dummy.webm"
+EXTRACTOR_THRESHOLD = 0.0
 
 app = FastAPI()
 extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
 preprocessor = DataPreprocessing()
 
+os.system("export PYTORCH_ENABLE_MPS_FALLBACK=1")
+
 @app.get("/videoRegister")
-async def registerVideo(video_file: UploadFile = File(...), score_threshold: float = 0.5):
-    video_tensor, video_length = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
-    skeletons = extractor.extract(video_tensor, score_threshold=score_threshold)
+async def registerVideo(video_file: UploadFile = File(...)):
+    print(f"[INFO/REGISTER] Video register request has been received.")
+    print(f"[INFO/REGISTER] Extractor threshold: {EXTRACTOR_THRESHOLD}")
 
-    print(f"video_length: {video_length}")
+    video_tensor = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
+    skeletons, video_length = extractor.extract(video_tensor, score_threshold=EXTRACTOR_THRESHOLD)
 
-    # TODO: We will insert the skeletons to the database.
+    print(f"[INFO/REGISTER] Video length: {video_length}")
     with open("dummy_skeletons.json", "w") as f: json.dump(skeletons, f)
-
-    os.remove(DUMMY_VIDEO_FILE_NAME)
-    if skeletons == "NO SKELETONS FOUND":   return {"error": "No skeletons found"}
 
     return {
         "skeletons": skeletons,
@@ -34,7 +36,7 @@ async def registerVideo(video_file: UploadFile = File(...), score_threshold: flo
     }
 
 @app.get("/getMetricsConsumer")
-async def getMetricsConsumer(video_file: UploadFile = File(...), score_threshold: float = 0.5, vno: int = 0):
+async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
     # TODO: We will get the guide skeleton from the database.
     # Database currently, shuting down. So we will try it as simulation.
     # connector, cursor = database_connector(database_secret_path="secret_key.json")
@@ -47,7 +49,7 @@ async def getMetricsConsumer(video_file: UploadFile = File(...), score_threshold
     cut_point = 24 * 15 # 15 seconds
 
     video_tensor, video_length = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)[:cut_point]
-    skeletons = extractor.extract(video_tensor, score_threshold=score_threshold)
+    skeletons = extractor.extract(video_tensor, score_threshold=EXTRACTOR_THRESHOLD)
 
     os.remove(DUMMY_VIDEO_FILE_NAME)
 

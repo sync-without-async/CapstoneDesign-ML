@@ -1,13 +1,15 @@
+from torchvision.models.detection import KeypointRCNN_ResNet50_FPN_Weights
+
 from tqdm import tqdm
 
 import torchvision.models as models
 import skvideo.io as skvideo
 import numpy as np
+import aiofiles
 import torch
 import utils
 import time
 import cv2
-import io
 import os
 
 class SkeletonExtractor:
@@ -40,10 +42,7 @@ class SkeletonExtractor:
         if self.device not in ['cpu', 'cuda', 'mps']:
             raise ValueError(f"Invalid device: {self.device}")
         
-        if self.device == 'mps':
-            os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-
-        self.model = models.detection.keypointrcnn_resnet50_fpn(weight=self.pretrained_bool, num_keypoints=self.number_of_keypoints)
+        self.model = models.detection.keypointrcnn_resnet50_fpn(weight=KeypointRCNN_ResNet50_FPN_Weights.COCO_LEGACY, num_keypoints=self.number_of_keypoints)
         self.model.to(self.device).eval()
 
     def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9) -> dict:
@@ -64,19 +63,17 @@ class SkeletonExtractor:
             >>> print(skeletons)"""
         total_fps, frame_count = 0., 0.
         extracted_skeletons = self.__extract_keypoint_mapping({})
-        pbar = tqdm(desc=f"Extracting skeletons from video", total=int(video_tensor.get(cv2.CAP_PROP_FRAME_COUNT)), unit="frames")
+        video_length = video_tensor.shape[0]
+        pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
 
-        while True:
-            ret, frame = video_tensor.read()
-            if not ret: break
+        for frame in video_tensor:
+            # Converts the frame to RGB and normalizes it
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = np.array(frame, dtype=np.float64) / 255.0
 
-            # Converts the frame from BGR to RGB and normalizes the values to be between 0 and 1
-            frame_from_video = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_from_video = np.array(frame, dtype=np.float64) / 255.0
-
-            # Transforms the frame into a tensor (1, 3, height, width)
-            frame_from_video = torch.from_numpy(frame_from_video).permute(2, 0, 1)
-            frame_from_video = frame_from_video.unsqueeze(0).float().to(self.device)
+            # Converts the frame to a tensor, and moves it to the device
+            frame_from_video = torch.Tensor(frame).permute(2, 0, 1)
+            frame_from_video = frame_from_video.unsqueeze(0).to(self.device)
 
             # Runs the model on the frame and gets the keypoints
             start_time = time.time()
@@ -84,21 +81,24 @@ class SkeletonExtractor:
                 outputs = self.model(frame_from_video)
             inference_time = time.time() - start_time
 
+            # Gets the keypoints from the outputs
             keypoints = utils.get_keypoints(outputs, score_threshold)
-
-            if keypoints == "NO SKELETONS FOUND":
-                extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
-            else:
-                extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
+            extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
+            
+            output_image = utils.draw_keypoints(outputs, frame)
 
             fps = 1.0 / inference_time
             total_fps += fps
             frame_count += 1
             pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}"})
             pbar.update(1)
-        pbar.close()
 
-        return extracted_skeletons
+            cv2.imshow("Output", output_image)
+            if cv2.waitKey(1) & 0xFF == ord('q'): break
+        pbar.close()
+        cv2.destroyAllWindows()
+
+        return extracted_skeletons, frame_count
 
     def __add_none_keypoints(self, input_mapping: dict) -> dict:
         """Adds None keypoints to the input mapping.
@@ -211,15 +211,14 @@ class SkeletonExtractor:
         return keypoint_names[index_number]
     
 class DataPreprocessing:
-    def __init__(self):
-        pass
+    def __save_and_read_video_file(self, video, temp_video_file_path):
+        with open(temp_video_file_path, "wb+") as f:
+            for chunk in video.file: f.write(chunk)
+        video = skvideo.vread(temp_video_file_path)
+        os.remove(temp_video_file_path)
+
+        return video
 
     def processing(self, video_file, temp_video_file_path: str = "temp.webm"):
-        video = video_file.file.read()
-        video = io.BytesIO(video)
-        with open(temp_video_file_path, "wb") as f: f.write(video.read())
-
-        video = cv2.VideoCapture(temp_video_file_path)
-        video_length = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        return video, video_length
+        video = self.__save_and_read_video_file(video_file, temp_video_file_path)
+        return video
