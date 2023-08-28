@@ -48,16 +48,6 @@ class SkeletonExtractor:
             progress=False
         )
         self.model.to(self.device).eval()
-
-    def __preprocessing_image(self, image: np.ndarray) -> torch.Tensor:
-        image_width, image_height, image_channels = image.shape
-
-        image = np.array(image, dtype=np.float32) / 255.0
-        image = image.reshape(1, image_channels, image_width, image_height)
-        image = torch.from_numpy(image)
-        image = image.to(self.device)
-
-        return image
     
     def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9) -> dict:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
@@ -85,7 +75,6 @@ class SkeletonExtractor:
             if not ret: break
             
             # Preprocesses the frame
-            # frame_from_video = self.__preprocessing_image(frame)
             frame_from_video = np.array(frame, dtype=np.float32) / 255.0
             frame_from_video = torch.Tensor(frame_from_video).permute(2, 0, 1)
             frame_from_video = frame_from_video.unsqueeze(0)
@@ -100,7 +89,11 @@ class SkeletonExtractor:
             # Gets the keypoints from the outputs
             keypoints = utils.get_keypoints(outputs, None, threshold=score_threshold)
             output_image = utils.draw_keypoints(outputs, frame)
-            extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
+
+            try:
+                extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
+            except:
+                extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
             
             fps = 1.0 / inference_time
             total_fps += fps
@@ -230,13 +223,21 @@ class DataPreprocessing:
     def __save_and_read_video_file(self, video, temp_video_file_path):
         with open(temp_video_file_path, "wb+") as f:
             for chunk in video.file: f.write(chunk)
-        # video = skvideo.vread(temp_video_file_path)
         video = cv2.VideoCapture(temp_video_file_path)
         os.remove(temp_video_file_path)
 
         return video
 
     def processing(self, video_file, temp_video_file_path: str = "temp.webm"):
+        """Processes the video file and returns the video tensor.
+        Save the video file to the temp_video_file_path and read it. Then, convert it to the video tensor.
+        
+        Args:
+            video_file (UploadFile): The video file to process.
+            temp_video_file_path (str, optional): The path to save the video file to. Defaults to "temp.webm".
+            
+        Returns:
+            torch.Tensor: The video tensor."""
         file_ext = video_file.filename.split(".")[-1]
         file_ext = temp_video_file_path.split(".")[0] + "." + file_ext
         video = self.__save_and_read_video_file(video_file, file_ext)
@@ -258,4 +259,14 @@ class Metrics:
         return np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
 
     def score(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        """Returns the score of the two arrays.
+        The score is calculated as follows:
+            score = jaccard_score(y_true, y_pred)
+            
+        Args:
+            y_true (np.ndarray): The ground truth array.
+            y_pred (np.ndarray): The predicted array.
+            
+        Returns:
+            float: The score of the two arrays."""
         return self.__jaccard_score(y_true, y_pred)

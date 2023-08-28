@@ -8,6 +8,15 @@ edges = [
 ]
 
 def draw_keypoints(outputs, image):
+    """Draw the keypoints on the image from the output of the model.
+    Keypoints mean the coordinates of the joints of the human body. The coordinates are normalized to the image size.
+
+    Args:
+        outputs (dict): The output of the model.
+        image (numpy.ndarray): The image to draw the keypoints.
+
+    Returns:
+        numpy.ndarray: The image with the keypoints."""
     for i in range(len(outputs[0]['keypoints'])):
         keypoints = outputs[0]['keypoints'][i].cpu().detach().numpy()
         if outputs[0]['scores'][i] > 0.9:
@@ -28,6 +37,16 @@ def draw_keypoints(outputs, image):
     return image
 
 def get_keypoints(outputs, image, threshold=0.9):
+    """Get keypoints from the output of the model. If the score is lower than the threshold, return None.
+    Keypoints mean the coordinates of the joints of the human body. The coordinates are normalized to the image size.
+    
+    Args:
+        outputs (dict): The output of the model.
+        image (numpy.ndarray): The image to draw the keypoints.
+        threshold (float): The threshold of the score. If the score is lower than the threshold, return None.
+        
+    Returns:
+        numpy.ndarray: The keypoints of the human body."""
     for i in range(len(outputs[0]['keypoints'])):
         keypoints = outputs[0]['keypoints'][i].cpu().detach().numpy()
         if outputs[0]['scores'][i] > threshold:

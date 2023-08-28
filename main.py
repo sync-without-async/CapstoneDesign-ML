@@ -48,7 +48,6 @@ async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
 
     # Currently, database has no data. So we will use dummy point.
     # cut_point = result[0][2]
-    cut_point = 24 * 15 # 15 seconds
 
     video_tensor = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
     skeletons, video_length = extractor.extract(video_tensor, score_threshold=EXTRACTOR_THRESHOLD)
@@ -65,13 +64,3 @@ async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
 
     score = metrics.score(guide_skeleton_values[:cut_index], consumer_skeleton_values[:cut_index])
     return {"metrics": score}
-
-@app.get("/UploadVideo") 
-async def uploadVideo(video_file: UploadFile = File(...)):
-    with open("dummy.webm", "wb") as f:
-        f.write(video_file.file.read())
-
-    video = skvideo.vread("dummy.webm")
-    for idx in range(len(video)):
-        plt.imshow(video[idx])
-        plt.show()
