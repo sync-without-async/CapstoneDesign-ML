@@ -97,8 +97,6 @@ class SkeletonExtractor:
                 outputs = self.model(frame_from_video)
             inference_time = time.time() - start_time
 
-            print(outputs)
-
             # Gets the keypoints from the outputs
             keypoints = utils.get_keypoints(outputs, None, threshold=score_threshold)
             output_image = utils.draw_keypoints(outputs, frame)
@@ -243,3 +241,21 @@ class DataPreprocessing:
         file_ext = temp_video_file_path.split(".")[0] + "." + file_ext
         video = self.__save_and_read_video_file(video_file, file_ext)
         return video
+
+class Metrics:
+    def __jaccard_score(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        """Returns the jaccard score of the two arrays.
+        The jaccard score is calculated as follows:
+            jaccard_score = (y_true & y_pred).sum() / (y_true | y_pred).sum()
+
+        Args:
+            y_true (np.ndarray): The ground truth array.
+            y_pred (np.ndarray): The predicted array.
+
+        Returns:
+            float: The jaccard score of the two arrays."""
+        y_true, y_pred = y_true.tolist(), y_pred.tolist() 
+        return np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
+
+    def score(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        return self.__jaccard_score(y_true, y_pred)

@@ -1,10 +1,9 @@
 from sklearn.metrics import jaccard_score
 
-from models import SkeletonExtractor, DataPreprocessing
+from models import SkeletonExtractor, DataPreprocessing, Metrics
 
 from connector import database_connector, database_query
 from fastapi import FastAPI, File, UploadFile
-from io import BytesIO
 
 import matplotlib.pyplot as plt
 import skvideo.io as skvideo
@@ -16,9 +15,9 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cpu')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
 preprocessor = DataPreprocessing()
-bytes_io = BytesIO()
+metrics = Metrics()
 
 os.system("export PYTORCH_ENABLE_MPS_FALLBACK=1")
 
@@ -51,10 +50,8 @@ async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
     # cut_point = result[0][2]
     cut_point = 24 * 15 # 15 seconds
 
-    video_tensor, video_length = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)[:cut_point]
-    skeletons = extractor.extract(video_tensor, score_threshold=EXTRACTOR_THRESHOLD)
-
-    os.remove(DUMMY_VIDEO_FILE_NAME)
+    video_tensor = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
+    skeletons, video_length = extractor.extract(video_tensor, score_threshold=EXTRACTOR_THRESHOLD)
 
     # TODO: We will return the result of the query.
     # As a dummy example, we will return the first row of the table. But now database has shutdown.
@@ -64,17 +61,13 @@ async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
     # Below code will be also used in the database query.
     guide_skeleton_values = np.array(list(guide_skeleton.values())).flatten()
     consumer_skeleton_values = np.array(list(skeletons.values())).flatten()
+    cut_index = np.min([len(guide_skeleton_values), len(consumer_skeleton_values)])
 
-    metrics = jaccard_score(guide_skeleton_values, consumer_skeleton_values, average='micro')
-
-    return {"metrics": metrics}
+    score = metrics.score(guide_skeleton_values[:cut_index], consumer_skeleton_values[:cut_index])
+    return {"metrics": score}
 
 @app.get("/UploadVideo") 
 async def uploadVideo(video_file: UploadFile = File(...)):
-    # bytes_io.write(video_file.file.read())
-    # with open("dummy.mp4", "wb") as f:
-    #     f.write(bytes_io.getbuffer())
-
     with open("dummy.webm", "wb") as f:
         f.write(video_file.file.read())
 
