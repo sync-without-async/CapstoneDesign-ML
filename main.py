@@ -1,5 +1,3 @@
-from sklearn.metrics import jaccard_score
-
 from models import SkeletonExtractor, DataPreprocessing, Metrics
 
 from connector import database_connector, database_query
