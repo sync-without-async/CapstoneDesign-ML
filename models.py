@@ -1,9 +1,6 @@
-from torchvision.models.detection import KeypointRCNN_ResNet50_FPN_Weights
-
 from tqdm import tqdm
 
 import torchvision.models as models
-import matplotlib.pyplot as plt
 import skvideo.io as skvideo
 import numpy as np
 import torch
