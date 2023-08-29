@@ -1,13 +1,12 @@
 from models import SkeletonExtractor, DataPreprocessing, Metrics
 
 from connector import database_connector, database_query
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Form
 
 from fastapi.responses import PlainTextResponse
 from fastapi.exceptions import *
 
 import skvideo.io as skvideo
-import numpy as np
 import requests
 import json
 import os
@@ -51,15 +50,12 @@ async def registerVideo(video_file: UploadFile = File(...)):
     print(f"[INFO/REGISTER] Extractor threshold: {EXTRACTOR_THRESHOLD}")
 
     video_tensor = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
-    skeletons, video_length = extractor.extract(video_tensor, score_threshold=EXTRACTOR_THRESHOLD)
-
-    print(f"[INFO/REGISTER] Video length: {video_length}")
-    with open("dummy_skeletons.json", "w") as f: json.dump(skeletons, f)
+    skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=None)
 
     return {"skeletons": skeletons, "video_length": video_length}
 
 @app.get("/getMetricsConsumer")
-async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
+async def getMetricsConsumer(vno: int = Form(), video_file: UploadFile = File(...)):
     """On this function, we will calculate the metrics between the consumer's skeleton and the guide's skeleton.
     Guide's skeleton is the skeleton that is extracted from the video that the consumer wants to follow. And the consumer's skeleton is the skeleton that is extracted from the consumer's video.
     Standard skeleton is the guide's skeleton, and the skeleton that already exists in the database.
@@ -78,7 +74,12 @@ async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
     table_name = "video"
     query = f"SELECT * FROM {table_name};"
     result = database_query(connector, cursor, query, verbose=False)
-    if result.shape[0] == 0:    return {"error": "No video found."}
+    if result.shape[0] == 0:    return {"error": "No query found in database."}
+
+    # Check if the video number is in the database. 
+    vno_list = result[:, 0].tolist()
+    if not vno in vno_list:     return {"error": "No video number found in database."}
+    vno = vno_list.index(vno)
 
     # Below code will be also used in the database query.
     # JSON URL is the 8th column of the table. VNO is the user selected video number.
@@ -86,17 +87,18 @@ async def getMetricsConsumer(video_file: UploadFile = File(...), vno: int = 0):
     response = requests.get(json_url)
     guide_skeleton = json.loads(response.text)
 
+    video_cut_point = result[vno, 8]
+    # video_cut_point = 10
+
     # Extact consumer's skeleton.
     video_tensor = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
-    skeletons, _ = extractor.extract(video_tensor, score_threshold=EXTRACTOR_THRESHOLD)
+    skeletons, _ = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=video_cut_point)
+
+    # Cutting the skeleton
+    for key in skeletons.keys():    skeletons[key] = skeletons[key][:video_cut_point]
+    for key in guide_skeleton.keys():    guide_skeleton[key] = guide_skeleton[key][:video_cut_point]
 
     # Calculate metrics (Jaccard score)
-    guide_skeleton_values = np.array(list(guide_skeleton.values())).flatten()
-    consumer_skeleton_values = np.array(list(skeletons.values())).flatten()
-
-    # Cut the skeleton values to the minimum length of the two.
-    # Because the length of the two skeleton values may be different.
-    cut_index = np.min([len(guide_skeleton_values), len(consumer_skeleton_values)])
-
-    score = metrics.score(guide_skeleton_values[:cut_index], consumer_skeleton_values[:cut_index])
+    score = metrics.score(y_true=guide_skeleton, y_pred=skeletons)
+    
     return {"metrics": score}

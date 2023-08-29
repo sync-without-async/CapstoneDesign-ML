@@ -46,7 +46,7 @@ class SkeletonExtractor:
         )
         self.model.to(self.device).eval()
     
-    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9) -> dict:
+    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9, video_length: float = None) -> dict:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
 
         Args:
@@ -62,14 +62,17 @@ class SkeletonExtractor:
             >>> video = cv2.VideoCapture("videos/webm/ec07c4c7eb818d6c.webm")
             >>> skeletons = extractor.extract(video)
             >>> print(skeletons)"""
+        if video_length is None: video_length = int(video_tensor.get(cv2.CAP_PROP_FRAME_COUNT))
+        print(f"[INFO/EXTRACT] Extracting skeletons from video. Video length: {video_length} frames.")
+
         total_fps, frame_count = 0., 0.
         extracted_skeletons = self.__extract_keypoint_mapping({})
-        video_length = int(video_tensor.get(cv2.CAP_PROP_FRAME_COUNT))
         pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
 
         while True:
             ret, frame = video_tensor.read()
             if not ret: break
+            if frame_count == video_length: break
             
             # Preprocesses the frame
             frame_from_video = np.array(frame, dtype=np.float32) / 255.0
@@ -241,7 +244,7 @@ class DataPreprocessing:
         return video
 
 class Metrics:
-    def __jaccard_score(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    def __jaccard_score(self, y_true: list, y_pred: list) -> float:
         """Returns the jaccard score of the two arrays.
         The jaccard score is calculated as follows:
             jaccard_score = (y_true & y_pred).sum() / (y_true | y_pred).sum()
@@ -252,10 +255,10 @@ class Metrics:
 
         Returns:
             float: The jaccard score of the two arrays."""
-        y_true, y_pred = y_true.tolist(), y_pred.tolist() 
-        return np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
+        metrics = np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
+        return metrics
 
-    def score(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    def score(self, y_true: dict, y_pred: dict) -> float:
         """Returns the score of the two arrays.
         The score is calculated as follows:
             score = jaccard_score(y_true, y_pred)
@@ -266,4 +269,12 @@ class Metrics:
             
         Returns:
             float: The score of the two arrays."""
-        return self.__jaccard_score(y_true, y_pred)
+        scores = []
+        for key in y_true:
+            scores.append(
+                self.__jaccard_score(y_true[key], y_pred[key])
+            )
+
+        score = np.mean(scores)
+        return score
+
