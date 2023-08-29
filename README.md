@@ -1,11 +1,54 @@
 # ReHab Machine Learning - Pose Estimation
 
-본 저장소에서는 ReHab 프로젝트의 인공지능 저장소 입니다. 프로젝트에서 인공지능은 핵심적인 요소 입니다. 사용자에게 운동을 어떻게 할 수 있도록 제공해주는 핵심적인 서비스이자 방법을 인공지능이 제공하기 때문입니다. 우리는 이 인공지능을 통해서 가이드 영상과 사용자에게 입력 받은 영상을 Feature Extraction 후 Cosine Similarty를 통해서 유사도 측정을 통해서 얼마나 잘 되고 있는지를 확인합니다.
+This repository is the artificial intelligence repository for the ReHab project. Artificial intelligence is a crucial element in the project, as it provides essential services and methods for guiding users in performing exercises. Through artificial intelligence, we offer guidance videos and provide users with a way to perform exercises. We evaluate how well the user is doing by measuring similarity through feature extraction and cosine similarity using the videos provided by the user.
 
-모델은 Pre-trained된 모델을 사용하였습니다. Baseline Model은 Posenet을 활용하고 있으며 Communication Overhead와 Computation Overhead의 Trade-off 등을 통해서 이는 변경될 수 있습니다.
+We utilize pre-trained models for our system. The baseline model employs Posenet, and this choice might change based on considerations such as the trade-off between communication overhead and computation overhead.
+
+## Requirements
+
+This code requires a set of essential modules to build an API server using FastAPI, run artificial intelligence processes with torch and torchvision, access databases using mysql_connector, transform and utilize uploaded videos using scikit-video, numpy, and openCV. It also utilizes the request and json modules for fetching files from Naver Cloud Object. Additionally, internal utility modules and methods exist, so `main.py` necessitates `utils.py`, `models.py`, and `connector.py`.
+
+The summarized requirements are as follows:
+
+- torch (>= 2.0.0)
+- torchvision (>= 0.15.0)
+- numpy (>= 1.23.5)
+- skvideo (>= 1.1.11)
+- cv2 (>= 4.8.0)
+- fastapi (>= 0.100.0)
+- polars (>= 0.17.7)
+- mysql.connector (>= 8.1.0)
+
+Please note that the `requirements.txt` hasn't been separately written due to the numerous modules used for personal experimentation and development within the current environment. Your understanding is appreciated.
+
+## Quick Start
+
+To set up the FastAPI server, it's essential to install [Uvicorn](https://www.uvicorn.org/) first. After installation, you can run the server using the following command in the directory containing `main.py`:
+
+```bash
+$ uvicorn main:app --host 127.0.0.1 --port 8080
+INFO:     Started server process [60991]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+```
+
+If you plan on making modifications and building the API server iteratively, you can use the following command:
+
+```bash
+$ uvicorn main:app --host 127.0.0.1 --port 8080 --reload
+INFO:     Will watch for changes in these directories: ['path/to/ReHab-ML']
+INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+INFO:     Started reloader process [61155] using StatReload
+INFO:     Started server process [61157]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+```
+
+The `--reload` parameter automatically restarts the server whenever there's a change in the internal code and it's saved. However, if the server is in the process of preparing a response after a request, it might restart after responding, so keep that in mind.
 
 ## Our Model
 
-Pytorch의 `torchvision.models` 모듈에서는 여러 Pretrained 모델과 SOTA 모델 구조들을 제공합니다. 우리는 선행학습된 사람의 모습을 추출하는 것이 중요하므로 Keypoint 추출이 가능한 Keypoint RCNN ResNet50 FPN 기반 모델을 사용하였습니다. Keypoint R-CNN + ResNet50 FPN 의 구조라고 이해하면 쉬울 거 같네요.
+The `torchvision.models` module in PyTorch provides various pre-trained and state-of-the-art model architectures. Since extracting human poses from images is crucial, we have used the Keypoint RCNN ResNet50 FPN-based model, which is capable of extracting keypoints. Understanding it as a structure comprising Keypoint R-CNN + ResNet50 FPN makes it easier to comprehend.
 
-[공식 문서](https://pytorch.org/vision/stable/models/generated/torchvision.models.detection.keypointrcnn_resnet50_fpn.html#torchvision.models.detection.keypointrcnn_resnet50_fpn)에 따르면 default weight는 COCO Dataset v1로 학습된 모델로 기존 Legacy 모델보다 더 많은 Parameter를 지녔지만 GFLOPs는 떨어졌으며 성능도 개선된 모델입니다.
+As mentioned in the [official documentation](https://pytorch.org/vision/stable/models/generated/torchvision.models.detection.keypointrcnn_resnet50_fpn.html#torchvision.models.detection.keypointrcnn_resnet50_fpn), the default weights are from a model trained on the COCO Dataset v1. This model has more parameters compared to legacy models, though GFLOPs are reduced, resulting in an improved performance model.
