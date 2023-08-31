@@ -3,11 +3,15 @@ from models import SkeletonExtractor, DataPreprocessing, Metrics
 from connector import database_connector, database_query
 from fastapi import FastAPI, File, UploadFile, Form
 
+from typing import Annotated
+
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.exceptions import *
 
 import skvideo.io as skvideo
 import requests
+import logging
 import json
 import os
 
@@ -20,6 +24,15 @@ preprocessor = DataPreprocessing()
 metrics = Metrics()
 
 os.system("export PYTORCH_ENABLE_MPS_FALLBACK=1")
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Handling Error
 @app.exception_handler(RequestValidationError)
@@ -34,8 +47,10 @@ async def http_exception_handler(request, exc):
 async def generic_exception_handler(request, exc):
     return PlainTextResponse(str(exc), status_code=500)
 
-@app.get("/videoRegister")
-async def registerVideo(video_file: UploadFile = File(...)):
+@app.post("/videoRegister")
+async def registerVideo(
+    video_file: UploadFile = File(...)
+):
     """On this function, we will extract the skeleton from the video that the consumer wants to follow.
     And then, we will save the skeleton as a JSON file. The JSON file will be saved in the database, CRUD not work on our layer (AI layer).
     After saved the data on the database, we will return the skeleton and the video length to the consumer.
@@ -54,8 +69,10 @@ async def registerVideo(video_file: UploadFile = File(...)):
 
     return {"skeletons": skeletons, "video_length": video_length}
 
-@app.get("/getMetricsConsumer")
-async def getMetricsConsumer(vno: int = Form(), video_file: UploadFile = File(...)):
+@app.post("/getMetricsConsumer")
+async def getMetricsConsumer(
+    vno: int = Form(), video_file: UploadFile = File(...)
+):
     """On this function, we will calculate the metrics between the consumer's skeleton and the guide's skeleton.
     Guide's skeleton is the skeleton that is extracted from the video that the consumer wants to follow. And the consumer's skeleton is the skeleton that is extracted from the consumer's video.
     Standard skeleton is the guide's skeleton, and the skeleton that already exists in the database.
