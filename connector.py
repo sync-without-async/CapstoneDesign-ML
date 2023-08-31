@@ -1,5 +1,6 @@
 import mysql.connector as db
 import polars as pl
+import numpy as np
 import json 
 
 def database_connector(database_secret_path: str = "database_secret.json") -> tuple:
@@ -48,6 +49,6 @@ def database_query(connector: db.MySQLConnection, cursor: db.cursor.MySQLCursor,
     result = cursor.fetchall()
     if verbose:
         print(result)
-
-    result = pl.DataFrame(result)
+    
+    result = np.array(result)
     return result
