@@ -19,7 +19,7 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cuda')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 
@@ -127,5 +127,7 @@ async def getMetricsConsumer(
         pred_video_height=video_height,
         pred_video_width=video_width
     )
+
+    logging.info(f"[INFO/GETMETRICS] Score Metrics: {score}")
 
     return {"metrics": score}

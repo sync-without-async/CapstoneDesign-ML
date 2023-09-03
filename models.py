@@ -226,7 +226,7 @@ class DataPreprocessing:
         with open(temp_video_file_path, "wb+") as f:
             for chunk in video.file: f.write(chunk)
         video.file.close()
-        video = cv2.VideoCapture(temp_video_file_path)
+        video = cv2.VideoCapture(temp_video_file_path)  
 
         return video
 
@@ -241,7 +241,7 @@ class DataPreprocessing:
         Returns:
             torch.Tensor: The video tensor."""
         file_ext = video_file.filename.split(".")[-1]
-        file_ext = temp_video_file_path.split(".")[0] + "." + file_ext
+        file_ext = temp_video_file_path.split(".")[0] + "." + "mp4"
         video = self.__save_and_read_video_file(video_file, file_ext)
         video_height, video_width = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
 
@@ -250,11 +250,11 @@ class DataPreprocessing:
 class Metrics:
     def __video_normalize(self, skeleton: dict, video_height: int, video_width: int, cut_point: int) -> dict:
         for key in skeleton.keys():
-            for idx in range(len(skeleton[key])):
-                skeleton[key][idx] = (
-                    skeleton[key][idx][0] / video_width,
-                    skeleton[key][idx][1] / video_height
-                )
+            print(skeleton[key])
+            skeleton[key] = (
+                np.array(skeleton[key]) / video_width,
+                np.array(skeleton[key]) / video_height
+            )
 
         for key in skeleton.keys():
             skeleton[key] = skeleton[key][:cut_point]
@@ -314,6 +314,7 @@ class Metrics:
         score = 0.
         for key in y_true.keys():
             score += self.__jaccard_score(y_true[key], y_pred[key])
+            # score += self.__normalized_mean_squared_error(y_true[key], y_pred[key])
         score /= len(y_true.keys())
 
         return score
