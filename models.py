@@ -225,6 +225,7 @@ class DataPreprocessing:
     def __save_and_read_video_file(self, video, temp_video_file_path):
         with open(temp_video_file_path, "wb+") as f:
             for chunk in video.file: f.write(chunk)
+        video.file.close()
         video = cv2.VideoCapture(temp_video_file_path)
         os.remove(temp_video_file_path)
 
@@ -271,6 +272,8 @@ class Metrics:
 
         Returns:
             float: The normalized mean squared error of the two arrays."""
+        y_true, y_pred = np.array(y_true), np.array(y_pred)
+        
         metrics = np.sum((y_true - y_pred) ** 2) / np.sum((y_true - y_true.mean()) ** 2)
         return metrics
 
@@ -288,7 +291,6 @@ class Metrics:
         scores = []
         for key in y_true:
             scores.append(
-                # self.__jaccard_score(y_true[key], y_pred[key])
                 self.__normalized_mean_squared_error(y_true[key], y_pred[key])
             )
 
