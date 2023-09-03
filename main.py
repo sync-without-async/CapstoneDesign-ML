@@ -19,7 +19,7 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cuda')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 
@@ -103,11 +103,12 @@ async def getMetricsConsumer(
 
     json_url = result[vno, 7]
     response = requests.get(json_url)
-    guide_skeleton = json.loads(response.text)
+    guide_skeleton = json.loads(response.text)['skeletons']
 
     guide_video_height = result[vno, -2]
     guide_video_width = result[vno, -1]
     video_cut_point = result[vno, 8]
+    # video_cut_point = 15
 
     # Extact consumer's skeleton.
     video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
