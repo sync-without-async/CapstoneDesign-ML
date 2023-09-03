@@ -19,7 +19,7 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cuda')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 
@@ -64,10 +64,10 @@ async def registerVideo(
     print(f"[INFO/REGISTER] Video register request has been received.")
     print(f"[INFO/REGISTER] Extractor threshold: {EXTRACTOR_THRESHOLD}")
 
-    video_tensor = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
+    video_tensor, video_heigth, video_width = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
     skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=None)
 
-    return {"skeletons": skeletons, "video_length": video_length}
+    return {"skeletons": skeletons, "video_length": video_length, "video_heigth": video_heigth, "video_width": video_width}
 
 @app.post("/getMetricsConsumer")
 async def getMetricsConsumer(
@@ -100,22 +100,32 @@ async def getMetricsConsumer(
 
     # Below code will be also used in the database query.
     # JSON URL is the 8th column of the table. VNO is the user selected video number.
+
     json_url = result[vno, 7]
     response = requests.get(json_url)
     guide_skeleton = json.loads(response.text)
 
+    guide_video_height = result[vno, -2]
+    guide_video_width = result[vno, -1]
     video_cut_point = result[vno, 8]
-    # video_cut_point = 10
 
     # Extact consumer's skeleton.
-    video_tensor = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
+    video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
     skeletons, _ = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=video_cut_point)
 
     # Cutting the skeleton
-    for key in skeletons.keys():    skeletons[key] = skeletons[key][:video_cut_point]
-    for key in guide_skeleton.keys():    guide_skeleton[key] = guide_skeleton[key][:video_cut_point]
+    # for key in skeletons.keys():    skeletons[key] = skeletons[key][:video_cut_point]
+    # for key in guide_skeleton.keys():    guide_skeleton[key] = guide_skeleton[key][:video_cut_point]
 
-    # Calculate metrics (Jaccard score)
-    score = metrics.score(y_true=guide_skeleton, y_pred=skeletons)
-    
+    # Calculate metrics 
+    score = metrics.score(
+        y_true=guide_skeleton,
+        true_video_height=guide_video_height,
+        true_video_width=guide_video_width,
+        true_cut_point=video_cut_point,
+        y_pred=skeletons,
+        pred_video_height=video_height,
+        pred_video_width=video_width
+    )
+
     return {"metrics": score}

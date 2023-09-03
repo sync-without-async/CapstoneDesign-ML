@@ -243,9 +243,24 @@ class DataPreprocessing:
         file_ext = video_file.filename.split(".")[-1]
         file_ext = temp_video_file_path.split(".")[0] + "." + file_ext
         video = self.__save_and_read_video_file(video_file, file_ext)
-        return video
+        video_height, video_width = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+
+        return video, video_height, video_width
 
 class Metrics:
+    def __video_normalize(self, skeleton: dict, video_height: int, video_width: int, cut_point: int) -> dict:
+        for key in skeleton.keys():
+            for idx in range(len(skeleton[key])):
+                skeleton[key][idx] = (
+                    skeleton[key][idx][0] / video_width,
+                    skeleton[key][idx][1] / video_height
+                )
+
+        for key in skeleton.keys():
+            skeleton[key] = skeleton[key][:cut_point]
+
+        return skeleton
+
     def __jaccard_score(self, y_true: list, y_pred: list) -> float:
         """Returns the jaccard score of the two arrays.
         The jaccard score is calculated as follows:
@@ -276,23 +291,29 @@ class Metrics:
         metrics = np.sum((y_true - y_pred) ** 2) / np.sum((y_true - y_true.mean()) ** 2)
         return metrics
 
-    def score(self, y_true: dict, y_pred: dict) -> float:
+    def score(self, 
+              y_true: dict, true_video_height: int, true_video_width: int, true_cut_point: int,
+              y_pred: dict, pred_video_height: int, pred_video_width: int) -> float:
         """Returns the score of the two arrays.
         The score is calculated as follows:
-            score = jaccard_score(y_true, y_pred)
-            
+            score = (jaccard_score + normalized_mean_squared_error) / 2
+
         Args:
             y_true (np.ndarray): The ground truth array.
+            true_video_height (int): The height of the video that the ground truth array is extracted from.
+            true_video_width (int): The width of the video that the ground truth array is extracted from.
             y_pred (np.ndarray): The predicted array.
-            
+            pred_video_height (int): The height of the video that the predicted array is extracted from.
+            pred_video_width (int): The width of the video that the predicted array is extracted from.
+
         Returns:
             float: The score of the two arrays."""
-        scores = []
-        for key in y_true:
-            scores.append(
-                self.__normalized_mean_squared_error(y_true[key], y_pred[key])
-            )
+        y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
+        y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
 
-        score = np.mean(scores)
+        score = 0.
+        for key in y_true.keys():
+            score += self.__jaccard_score(y_true[key], y_pred[key])
+        score /= len(y_true.keys())
+
         return score
-
