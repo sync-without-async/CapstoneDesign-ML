@@ -38,14 +38,16 @@ class SkeletonExtractor:
         self.device = device
         if self.device not in ['cpu', 'cuda', 'mps']:
             raise ValueError(f"Invalid device: {self.device}")
-        
-        self.model = models.detection.keypointrcnn_resnet50_fpn(
+
+        self.model = getattr(
+            models.detection, 
+            "keypointrcnn_resnet50_fpn"
+        )(
             pretrained=self.pretrained_bool,
-            num_keypoints=self.number_of_keypoints, 
+            num_keypoints=self.number_of_keypoints,
             progress=False
-        )
-        self.model.to(self.device).eval()
-    
+        ).to(self.device).eval()
+   
     def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9, video_length: float = None) -> dict:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
 
@@ -258,6 +260,20 @@ class Metrics:
         metrics = np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
         return metrics
 
+    def __normalized_mean_squared_error(self, y_true: list, y_pred: list) -> float:
+        """Returns the normalized mean squared error of the two arrays.
+        The normalized mean squared error is calculated as follows:
+            normalized_mean_squared_error = (y_true - y_pred)^2 / (y_true - y_true.mean())^2
+
+        Args:
+            y_true (np.ndarray): The ground truth array.
+            y_pred (np.ndarray): The predicted array.
+
+        Returns:
+            float: The normalized mean squared error of the two arrays."""
+        metrics = np.sum((y_true - y_pred) ** 2) / np.sum((y_true - y_true.mean()) ** 2)
+        return metrics
+
     def score(self, y_true: dict, y_pred: dict) -> float:
         """Returns the score of the two arrays.
         The score is calculated as follows:
@@ -272,7 +288,8 @@ class Metrics:
         scores = []
         for key in y_true:
             scores.append(
-                self.__jaccard_score(y_true[key], y_pred[key])
+                # self.__jaccard_score(y_true[key], y_pred[key])
+                self.__normalized_mean_squared_error(y_true[key], y_pred[key])
             )
 
         score = np.mean(scores)
