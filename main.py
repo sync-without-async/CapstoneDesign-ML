@@ -19,7 +19,7 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cuda')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 

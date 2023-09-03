@@ -227,7 +227,6 @@ class DataPreprocessing:
             for chunk in video.file: f.write(chunk)
         video.file.close()
         video = cv2.VideoCapture(temp_video_file_path)
-        os.remove(temp_video_file_path)
 
         return video
 
