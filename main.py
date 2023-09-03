@@ -103,11 +103,12 @@ async def getMetricsConsumer(
 
     json_url = result[vno, 7]
     response = requests.get(json_url)
-    guide_skeleton = json.loads(response.text)
+    guide_skeleton = json.loads(response.text)['skeletons']
 
     guide_video_height = result[vno, -2]
     guide_video_width = result[vno, -1]
     video_cut_point = result[vno, 8]
+    # video_cut_point = 15
 
     # Extact consumer's skeleton.
     video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
@@ -127,5 +128,7 @@ async def getMetricsConsumer(
         pred_video_height=video_height,
         pred_video_width=video_width
     )
+
+    logging.info(f"[INFO/GETMETRICS] Score Metrics: {score}")
 
     return {"metrics": score}
