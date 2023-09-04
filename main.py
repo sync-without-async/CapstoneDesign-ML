@@ -98,26 +98,25 @@ async def getMetricsConsumer(
     if not vno in vno_list:     return {"error": "No video number found in database."}
     vno = vno_list.index(vno)
 
-    # Below code will be also used in the database query.
-    # JSON URL is the 8th column of the table. VNO is the user selected video number.
-
     json_url = result[vno, 7]
     response = requests.get(json_url)
     guide_skeleton = json.loads(response.text)['skeletons']
 
-    guide_video_height = result[vno, -2]
-    guide_video_width = result[vno, -1]
-    video_cut_point = result[vno, 8]
-    # video_cut_point = 15
-
+    # Below code will be also used in the database query.
+    # JSON URL is the 8th column of the table. VNO is the user selected video number.
     # Extact consumer's skeleton.
     video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
-    skeletons, _ = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=video_cut_point)
 
-    # Cutting the skeleton
-    # for key in skeletons.keys():    skeletons[key] = skeletons[key][:video_cut_point]
-    # for key in guide_skeleton.keys():    guide_skeleton[key] = guide_skeleton[key][:video_cut_point]
+    guide_video_height = json.loads(response.text)['video_heigth']
+    guide_video_width = json.loads(response.text)['video_width']
+    video_cut_point = result[vno, 8]
+    
+    skeletons, frame_count = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=video_cut_point)
 
+    # Check if the video cut point is in the database.
+    if video_cut_point >= frame_count:  video_cut_point = frame_count
+    logging.info(f"[INFO/GETMETRICS] Video cut point: {video_cut_point}")
+    
     # Calculate metrics 
     score = metrics.score(
         y_true=guide_skeleton,
