@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 videos
 examples/
 
@@ -12,6 +13,8 @@ dummy.mp4
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
 
 ### Python ###
+=======
+>>>>>>> a7509d5620c31fae26beb59c41c54c0080f2f70e
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -172,6 +175,7 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+<<<<<<< HEAD
 
 ### Python Patch ###
 # Poetry local configuration file - https://python-poetry.org/docs/configuration/#local-configuration
@@ -184,3 +188,5 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+=======
+>>>>>>> a7509d5620c31fae26beb59c41c54c0080f2f70e
