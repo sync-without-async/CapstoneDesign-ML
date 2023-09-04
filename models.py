@@ -250,7 +250,7 @@ class DataPreprocessing:
         return video, video_height, video_width
 
 class Metrics:
-    def __video_normalize(self, skeleton: dict, video_height: int, video_width: int, cut_point: int) -> dict:
+    def __video_normalize(self, skeleton: dict, video_height: int, video_width: int, cut_point: int):
         """Normalizes the skeleton to the video height and width.
         The skeleton is normalized as follows:
             normalized_skeleton = skeleton / video_height or video_width
@@ -264,17 +264,16 @@ class Metrics:
         Returns:
             dict: The normalized skeleton."""
         for key in skeleton.keys():
-            skeleton[key] = (
-                np.array(skeleton[key]) / video_width,
-                np.array(skeleton[key]) / video_height
-            )
-
-        for key in skeleton.keys():
-            skeleton[key] = skeleton[key][:cut_point]
+            coordinate = []
+            for idx in range(int(cut_point)):
+                x, y = skeleton[key][idx]
+                x, y = x / video_width, y / video_height
+                coordinate.append((x, y))
+            skeleton[key] = coordinate
 
         return skeleton
 
-    def __jaccard_score(self, y_true: list, y_pred: list, cut_point: int) -> float:
+    def __jaccard_score(self, y_true: list, y_pred: list) -> float:
         """Returns the jaccard score of the two arrays.
         The jaccard score is calculated as follows:
             jaccard_score = (y_true & y_pred).sum() / (y_true | y_pred).sum()
@@ -285,9 +284,6 @@ class Metrics:
 
         Returns:
             float: The jaccard score of the two arrays."""
-        y_true, y_pred = np.array(y_true).flatten(), np.array(y_pred).flatten()
-        y_true, y_pred = y_true[:cut_point], y_pred[:cut_point]
-        
         metrics = np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
         return metrics
 
@@ -323,13 +319,18 @@ class Metrics:
             pred_video_width (int): The width of the video that the predicted array is extracted from.
 
         Returns:
-            float: The score of the two arrays."""
+            float: The score of the two arrays.""" 
+        
         y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
         y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
 
-        score = 0.
+        y_true_values, y_pred_values = [], []
         for key in y_true.keys():
-            score += self.__jaccard_score(y_true[key], y_pred[key], true_cut_point)
-        score /= len(y_true.keys())
+            y_true_value, y_pred_value = y_true[key], y_pred[key]
+            y_true_values.extend(y_true_value)
+            y_pred_values.extend(y_pred_value)
+
+        jaccard_score = self.__jaccard_score(y_true_values, y_pred_values)
+        score = jaccard_score
 
         return score
