@@ -49,8 +49,55 @@ class SkeletonExtractor:
             num_keypoints=self.number_of_keypoints,
             progress=False
         ).to(self.device).eval()
+
+        self.bounding_box_model = getattr(
+            models.detection,
+            "fasterrcnn_resnet50_fpn"
+        )(
+            pretrained=self.pretrained_bool,
+            progress=False
+        ).to(self.device).eval()
+
+    def __bounding_box(self, video_tensor: np.ndarray, score_threshold: float = 0.9) -> list:
+        """Returns the bounding box of the video.
+        The bounding box is calculated as follows:
+            bounding_box = (x1, y1, x2, y2)
+
+        Args:
+            video_tensor (np.ndarray): The video to extract the bounding box from.
+            score_threshold (float, optional): The minimum score for a bounding box to be extracted. Defaults to 0.9.
+
+        Returns:
+            list: The bounding box of the video."""
+        video_tensor = torch.from_numpy(
+            video_tensor / 255.0
+        ).permute(2, 0, 1).unsqueeze(0).float().to(self.device)
+
+        with torch.no_grad():
+            outputs = self.bounding_box_model(video_tensor)
+
+        cropped_image = []
+        for idx in range(len(outputs[0])):
+            box_coord = outputs[0]['boxes'][idx]
+            box_score = outputs[0]['scores'][idx]
+            box_label = outputs[0]['labels'][idx]
+
+            if box_score > score_threshold and box_label == 1:
+                box_coord = box_coord.cpu().numpy()
+                box_coord = box_coord.astype(int)
+
+                x1, y1, x2, y2 = box_coord[0], box_coord[1], box_coord[2], box_coord[3]
+                cropped_image = video_tensor[0, :, y1:y2, x1:x2]
+                cropped_image = cropped_image.permute(1, 2, 0).cpu().numpy()
+                break
+
+        cropped_image = cv2.resize(cropped_image, (512, 1024))
+        cropped_image = torch.Tensor(cropped_image).permute(2, 0, 1)
+        cropped_image = cropped_image.unsqueeze(0).float().to(self.device)
+
+        return cropped_image
    
-    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9, video_length: float = None) -> dict:
+    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.93, video_length: float = None) -> dict:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
 
         Args:
@@ -87,12 +134,15 @@ class SkeletonExtractor:
             # Runs the model on the frame and gets the keypoints
             start_time = time.time()
             with torch.no_grad():
-                outputs = self.model(frame_from_video)
+                cropped_human = self.__bounding_box(frame, score_threshold=score_threshold)
+                outputs = self.model(cropped_human)
             inference_time = time.time() - start_time
 
             # Gets the keypoints from the outputs
+            cropped_human = cropped_human.squeeze(0).permute(1, 2, 0).cpu().numpy()
+
             keypoints = utils.get_keypoints(outputs, None, threshold=score_threshold)
-            output_image = utils.draw_keypoints(outputs, frame)
+            output_image = utils.draw_keypoints(outputs, cropped_human)
 
             try:
                 extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
@@ -108,6 +158,7 @@ class SkeletonExtractor:
 
             cv2.imshow("Output", output_image)
             if cv2.waitKey(1) & 0xFF == ord('q'): break
+
         pbar.close()
         cv2.destroyAllWindows()
 
