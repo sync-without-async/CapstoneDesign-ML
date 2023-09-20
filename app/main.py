@@ -1,6 +1,6 @@
-from models import SkeletonExtractor, DataPreprocessing, Metrics
+from .models import SkeletonExtractor, DataPreprocessing, Metrics
 
-from connector import database_connector, database_query
+from .connector import database_connector, database_query
 from fastapi import FastAPI, File, UploadFile, Form
 
 from typing import Annotated
@@ -19,7 +19,7 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cpu')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 

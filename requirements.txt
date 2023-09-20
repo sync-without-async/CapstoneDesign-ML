@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+
+polars
+numpy
+mysql-connector-python
+scikit-video
+scikit-learn
+
+torch
+torchvision
+opencv-python
+
+matplotlib
+tqdm

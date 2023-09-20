@@ -4,10 +4,10 @@ import torchvision.models as models
 import skvideo.io as skvideo
 import numpy as np
 import torch
-import utils
 import time
 import cv2
-import os
+
+from . import utils
 
 from sklearn.metrics import jaccard_score
 
