@@ -67,7 +67,17 @@ async def registerVideo(
     video_tensor, video_heigth, video_width = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
     skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=None)
 
-    return {"skeletons": skeletons, "video_length": video_length, "video_heigth": video_heigth, "video_width": video_width}
+    extracted_skeleton_json = {
+        "skeletons": skeletons,
+        "video_length": video_length,
+        "video_heigth": video_heigth,
+        "video_width": video_width
+    }
+
+    with open("extracted_skeleton.json", "w") as f:
+        json.dump(extracted_skeleton_json, f)
+
+    return extracted_skeleton_json
 
 @app.post("/getMetricsConsumer")
 async def getMetricsConsumer(
@@ -83,34 +93,47 @@ async def getMetricsConsumer(
 
     Returns:
         float or dobuble: The metrics between the consumer's skeleton and the guide's skeleton."""
+    testing_flag = True
     print(f"[INFO/GETMETRICS] Video get metrics request has been received.")
     print(f"[INFO/GETMETRICS] VNO: {vno}")
-
-    # Below code will be also used in the database query. 
-    connector, cursor = database_connector(database_secret_path="secret_key.json")
-    table_name = "video"
-    query = f"SELECT * FROM {table_name};"
-    result = database_query(connector, cursor, query, verbose=False)
-    if result.shape[0] == 0:    return {"error": "No query found in database."}
-
-    # Check if the video number is in the database. 
-    vno_list = result[:, 0].tolist()
-    if not vno in vno_list:     return {"error": "No video number found in database."}
-    vno = vno_list.index(vno)
-
-    json_url = result[vno, 7]
-    response = requests.get(json_url)
-    guide_skeleton = json.loads(response.text)['skeletons']
-
-    # Below code will be also used in the database query.
-    # JSON URL is the 8th column of the table. VNO is the user selected video number.
-    # Extact consumer's skeleton.
-    video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
-
-    guide_video_height = json.loads(response.text)['video_heigth']
-    guide_video_width = json.loads(response.text)['video_width']
-    video_cut_point = result[vno, 8]
     
+    if not testing_flag:
+        # Below code will be also used in the database query. 
+        connector, cursor = database_connector(database_secret_path="secret_key.json")
+        table_name = "video"
+        query = f"SELECT * FROM {table_name};"
+        result = database_query(connector, cursor, query, verbose=False)
+        if result.shape[0] == 0:    return {"error": "No query found in database."}
+
+        # Check if the video number is in the database. 
+        vno_list = result[:, 0].tolist()
+        if not vno in vno_list:     return {"error": "No video number found in database."}
+        vno = vno_list.index(vno)
+
+        json_url = result[vno, 7]
+        response = requests.get(json_url)
+        guide_skeleton = json.loads(response.text)['skeletons']
+
+        # Below code will be also used in the database query.
+        # JSON URL is the 8th column of the table. VNO is the user selected video number.
+        # Extact consumer's skeleton.
+        video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
+
+        guide_video_height = json.loads(response.text)['video_heigth']
+        guide_video_width = json.loads(response.text)['video_width']
+        video_cut_point = result[vno, 8]
+    
+    else:
+        with open("extracted_skeleton.json", "r") as f:
+            guide_skeleton = json.load(f)
+        guide_video_width, guide_video_height = guide_skeleton['video_width'], guide_skeleton['video_heigth']
+        video_lenght = guide_skeleton['video_length']
+
+        video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
+        video_cut_point = video_lenght
+
+    print(f"[INFO/GETMETRICS] Testing flag: {testing_flag}")
+
     skeletons, frame_count = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=video_cut_point)
 
     # Check if the video cut point is in the database.
