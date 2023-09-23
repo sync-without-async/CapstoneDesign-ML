@@ -93,7 +93,7 @@ async def getMetricsConsumer(
 
     Returns:
         float or dobuble: The metrics between the consumer's skeleton and the guide's skeleton."""
-    testing_flag = True
+    testing_flag = False
     print(f"[INFO/GETMETRICS] Video get metrics request has been received.")
     print(f"[INFO/GETMETRICS] VNO: {vno}")
     
@@ -103,6 +103,10 @@ async def getMetricsConsumer(
         table_name = "video"
         query = f"SELECT * FROM {table_name};"
         result = database_query(connector, cursor, query, verbose=False)
+
+        print(f"[INFO/GETMETRICS] Database query: {query}")
+        print(f"[INFO/GETMETRICS] Database result: {result}")
+
         if result.shape[0] == 0:    return {"error": "No query found in database."}
 
         # Check if the video number is in the database. 

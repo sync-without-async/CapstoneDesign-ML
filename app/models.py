@@ -156,7 +156,6 @@ class SkeletonExtractor:
             pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}"})
             pbar.update(1)
 
-            cv2.imshow("Output", output_image)
             if cv2.waitKey(1) & 0xFF == ord('q'): break
 
         pbar.close()
