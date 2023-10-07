@@ -1,13 +1,13 @@
-from .models import SkeletonExtractor, DataPreprocessing, Metrics
+from models import SkeletonExtractor, DataPreprocessing, Metrics
 
-from .connector import database_connector, database_query
+from connector import database_connector, database_query
 from fastapi import FastAPI, File, UploadFile, Form
 
 from typing import Annotated
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
-from fastapi.exceptions import *
+from fastapi.exceptions import RequestValidationError, HTTPException
 
 import skvideo.io as skvideo
 import requests
@@ -39,10 +39,6 @@ app.add_middleware(
 async def validation_exception_handler(request, exc):
     return PlainTextResponse(str(exc), status_code=400)
 
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request, exc):
-    return PlainTextResponse(str(exc.detail), status_code=exc.status_code)
-
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):
     return PlainTextResponse(str(exc), status_code=500)
@@ -65,7 +61,7 @@ async def registerVideo(
     print(f"[INFO/REGISTER] Extractor threshold: {EXTRACTOR_THRESHOLD}")
 
     video_tensor, video_heigth, video_width = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
-    skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=None)
+    skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD)
 
     extracted_skeleton_json = {
         "skeletons": skeletons,
@@ -110,7 +106,7 @@ async def getMetricsConsumer(
         if result.shape[0] == 0:    return {"error": "No query found in database."}
 
         # Check if the video number is in the database. 
-        vno_list = result[:, 0].tolist()
+        vno_list = result[:, 0].to_list()
         if not vno in vno_list:     return {"error": "No video number found in database."}
         vno = vno_list.index(vno)
 
