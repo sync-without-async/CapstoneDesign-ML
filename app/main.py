@@ -3,13 +3,11 @@ from models import SkeletonExtractor, DataPreprocessing, Metrics
 from connector import database_connector, database_query
 from fastapi import FastAPI, File, UploadFile, Form
 
-from typing import Annotated
-
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
-from fastapi.exceptions import RequestValidationError, HTTPException
+from fastapi.exceptions import RequestValidationError
 
-import skvideo.io as skvideo
+import numpy as np
 import requests
 import logging
 import json
@@ -61,7 +59,7 @@ async def registerVideo(
     print(f"[INFO/REGISTER] Extractor threshold: {EXTRACTOR_THRESHOLD}")
 
     video_tensor, video_heigth, video_width = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
-    skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD)
+    skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=None)
 
     extracted_skeleton_json = {
         "skeletons": skeletons,
@@ -89,7 +87,7 @@ async def getMetricsConsumer(
 
     Returns:
         float or dobuble: The metrics between the consumer's skeleton and the guide's skeleton."""
-    testing_flag = False
+    testing_flag = True
     print(f"[INFO/GETMETRICS] Video get metrics request has been received.")
     print(f"[INFO/GETMETRICS] VNO: {vno}")
     
@@ -139,10 +137,10 @@ async def getMetricsConsumer(
     # Check if the video cut point is in the database.
     if video_cut_point >= frame_count:  video_cut_point = frame_count
     logging.info(f"[INFO/GETMETRICS] Video cut point: {video_cut_point}")
-    
+
     # Calculate metrics 
     score = metrics.score(
-        y_true=guide_skeleton,
+        y_true=guide_skeleton['skeletons'],
         true_video_height=guide_video_height,
         true_video_width=guide_video_width,
         true_cut_point=video_cut_point,

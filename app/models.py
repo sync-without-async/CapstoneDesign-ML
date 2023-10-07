@@ -3,9 +3,11 @@ from tqdm import tqdm
 import torchvision.models as models
 import skvideo.io as skvideo
 import numpy as np
-import torch
 import time
 import cv2
+
+import torch.nn as nn
+import torch
 
 import utils
 
@@ -298,6 +300,35 @@ class DataPreprocessing:
 
         return video, video_height, video_width
 
+class MetricsModel(nn.Module):
+        def __init__(self):
+            super(MetricsModel, self).__init__()
+            self.guide_fc1 = nn.Linear(34, 256)
+            self.guide_fc2 = nn.Linear(256, 32)
+
+            self.user_fc1 = nn.Linear(34, 256)
+            self.user_fc2 = nn.Linear(256, 32)
+
+            self.fc1 = nn.Linear(64, 32)
+            self.fc2 = nn.Linear(32, 1)
+
+            self.relu = nn.GELU()
+            self.sigmoid = nn.Sigmoid()
+
+        def forward(self, guide_X, user_X):
+            guide_X = self.sigmoid(self.guide_fc1(guide_X))
+            guide_X = self.sigmoid(self.guide_fc2(guide_X))
+
+            user_X = self.sigmoid(self.user_fc1(user_X))
+            user_X = self.sigmoid(self.user_fc2(user_X))
+
+            x = torch.cat((guide_X, user_X), dim=1)
+
+            x = self.sigmoid(self.fc1(x))
+            x = self.sigmoid(self.fc2(x))
+
+            return x
+
 class Metrics:
     def __video_normalize(self, skeleton: dict, video_height: int, video_width: int, cut_point: int):
         """Normalizes the skeleton to the video height and width.
@@ -335,6 +366,19 @@ class Metrics:
             float: The jaccard score of the two arrays."""
         metrics = np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
         return metrics
+    
+    def __linear_model(self, 
+                       y_true: torch.Tensor, 
+                       y_pred: torch.Tensor) -> float:
+        model = MetricsModel()
+        model.load_state_dict(torch.load("model.pth"))
+        model.eval()
+
+        with torch.no_grad():
+            metrics = model(y_true, y_pred)
+        metrics = metrics.cpu().numpy()
+        metrics = np.sum(metrics) / len(metrics)
+        return metrics
 
     def __normalized_mean_squared_error(self, y_true, y_pred) -> float:
         """Returns the normalized mean squared error of the two arrays.
@@ -370,16 +414,20 @@ class Metrics:
         Returns:
             float: The score of the two arrays.""" 
         
-        y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
-        y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
+        # y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
+        # y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
 
         y_true_values, y_pred_values = [], []
         for key in y_true.keys():
             y_true_value, y_pred_value = y_true[key], y_pred[key]
             y_true_values.extend(y_true_value)
             y_pred_values.extend(y_pred_value)
+        y_true_values, y_pred_values = torch.Tensor(y_true_values), torch.Tensor(y_pred_values)
+        y_true_values, y_pred_values = y_true_values.view(-1, 34), y_pred_values.view(-1, 34)
 
-        jaccard_score = self.__jaccard_score(y_true_values, y_pred_values)
-        score = jaccard_score
+        minmum_length = min(y_true_values.shape[0], y_pred_values.shape[0])
+        y_true_values, y_pred_values = y_true_values[:minmum_length, :], y_pred_values[:minmum_length, :]
 
-        return score
+        metrics_score = self.__linear_model(y_true_values, y_pred_values)
+
+        return metrics_score
