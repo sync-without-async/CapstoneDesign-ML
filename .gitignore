@@ -1,6 +1,8 @@
 videos
 examples/
 
+experiments/
+
 *.webm
 
 secret_key.json
