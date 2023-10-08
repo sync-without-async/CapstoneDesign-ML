@@ -302,30 +302,29 @@ class DataPreprocessing:
 
 class MetricsModel(nn.Module):
         def __init__(self):
-            super(MetricsModel, self).__init__()
-            self.guide_fc1 = nn.Linear(34, 256)
-            self.guide_fc2 = nn.Linear(256, 32)
+            super(Model, self).__init__()
+            self.guide_points_skeleton = nn.Linear(34, 32)
+            self.consumer_points_skeleton = nn.Linear(34, 32)
+            self.hidden_1 = nn.GRU(64, 64, batch_first=False)
+            self.score = nn.Sequential(
+                nn.Linear(64, 16),
+                nn.Linear(16, 1)
+            )
 
-            self.user_fc1 = nn.Linear(34, 256)
-            self.user_fc2 = nn.Linear(256, 32)
-
-            self.fc1 = nn.Linear(64, 32)
-            self.fc2 = nn.Linear(32, 1)
-
-            self.relu = nn.GELU()
+            self.relu = nn.ReLU()
             self.sigmoid = nn.Sigmoid()
 
         def forward(self, guide_X, user_X):
-            guide_X = self.sigmoid(self.guide_fc1(guide_X))
-            guide_X = self.sigmoid(self.guide_fc2(guide_X))
-
-            user_X = self.sigmoid(self.user_fc1(user_X))
-            user_X = self.sigmoid(self.user_fc2(user_X))
+            guide_X = self.relu(self.guide_points_skeleton(guide_X))
+            user_X = self.relu(self.consumer_points_skeleton(user_X))
 
             x = torch.cat((guide_X, user_X), dim=1)
+            x = x.unsqueeze(0)
+            x = x.permute(1, 0, 2)
+            x, _ = self.hidden_1(x)
+            x = x.squeeze(0)
 
-            x = self.sigmoid(self.fc1(x))
-            x = self.sigmoid(self.fc2(x))
+            x = self.sigmoid(self.score(x))
 
             return x
 
