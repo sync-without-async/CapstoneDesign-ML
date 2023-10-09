@@ -7,6 +7,9 @@ experiments/
 
 secret_key.json
 
+*.json
+*.mp4
+
 .vscode
 
 # Created by https://www.toptal.com/developers/gitignore/api/python

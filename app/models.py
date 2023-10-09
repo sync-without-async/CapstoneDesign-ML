@@ -92,7 +92,7 @@ class SkeletonExtractor:
                 cropped_image = cropped_image.permute(1, 2, 0).cpu().numpy()
                 break
 
-        cropped_image = cv2.resize(cropped_image, (512, 1024))
+        cropped_image = cv2.resize(cropped_image, (256, 512))
         cropped_image = torch.Tensor(cropped_image).permute(2, 0, 1)
         cropped_image = cropped_image.unsqueeze(0).float().to(self.device)
 
@@ -143,7 +143,6 @@ class SkeletonExtractor:
             cropped_human = cropped_human.squeeze(0).permute(1, 2, 0).cpu().numpy()
 
             keypoints = utils.get_keypoints(outputs, None, threshold=score_threshold)
-            output_image = utils.draw_keypoints(outputs, cropped_human)
 
             try:
                 extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
@@ -302,7 +301,7 @@ class DataPreprocessing:
 
 class MetricsModel(nn.Module):
         def __init__(self):
-            super(Model, self).__init__()
+            super(MetricsModel, self).__init__()
             self.guide_points_skeleton = nn.Linear(34, 32)
             self.consumer_points_skeleton = nn.Linear(34, 32)
             self.hidden_1 = nn.GRU(64, 64, batch_first=False)
