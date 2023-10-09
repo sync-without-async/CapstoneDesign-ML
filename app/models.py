@@ -302,9 +302,11 @@ class DataPreprocessing:
 class MetricsModel(nn.Module):
         def __init__(self):
             super(MetricsModel, self).__init__()
-            self.guide_points_skeleton = nn.Linear(34, 32)
-            self.consumer_points_skeleton = nn.Linear(34, 32)
-            self.hidden_1 = nn.GRU(64, 64, batch_first=False)
+            self.guide_points_skeleton = nn.Linear(34, 64)
+            self.consumer_points_skeleton = nn.Linear(34, 64)
+
+            self.hidden_1 = nn.Linear(128, 64)
+
             self.score = nn.Sequential(
                 nn.Linear(64, 16),
                 nn.Linear(16, 1)
@@ -318,11 +320,8 @@ class MetricsModel(nn.Module):
             user_X = self.relu(self.consumer_points_skeleton(user_X))
 
             x = torch.cat((guide_X, user_X), dim=1)
-            x = x.unsqueeze(0)
-            x = x.permute(1, 0, 2)
-            x, _ = self.hidden_1(x)
-            x = x.squeeze(0)
-
+            x = self.relu(self.hidden_1(x))
+            
             x = self.sigmoid(self.score(x))
 
             return x
@@ -351,7 +350,9 @@ class Metrics:
 
         return skeleton
 
-    def __jaccard_score(self, y_true: list, y_pred: list) -> float:
+    def __jaccard_score(self, 
+                        y_true: torch.Tensor, 
+                        y_pred: torch.Tensor) -> float:
         """Returns the jaccard score of the two arrays.
         The jaccard score is calculated as follows:
             jaccard_score = (y_true & y_pred).sum() / (y_true | y_pred).sum()
@@ -369,7 +370,10 @@ class Metrics:
                        y_true: torch.Tensor, 
                        y_pred: torch.Tensor) -> float:
         model = MetricsModel()
-        model.load_state_dict(torch.load("model.pth"))
+        model.load_state_dict(
+            torch.load("model.pth", 
+                       map_location=torch.device('cpu')
+        ))
         model.eval()
 
         with torch.no_grad():
@@ -426,6 +430,7 @@ class Metrics:
         minmum_length = min(y_true_values.shape[0], y_pred_values.shape[0])
         y_true_values, y_pred_values = y_true_values[:minmum_length, :], y_pred_values[:minmum_length, :]
 
-        metrics_score = self.__linear_model(y_true_values, y_pred_values)
+        # metrics_score = self.__linear_model(y_true_values, y_pred_values)
+        metrics_score = self.__jaccard_score(y_true_values, y_pred_values)
 
         return metrics_score
