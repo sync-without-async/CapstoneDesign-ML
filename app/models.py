@@ -135,12 +135,12 @@ class SkeletonExtractor:
             # Runs the model on the frame and gets the keypoints
             start_time = time.time()
             with torch.no_grad():
-                cropped_human = self.__bounding_box(frame, score_threshold=score_threshold)
-                outputs = self.model(cropped_human)
+                # cropped_human = self.__bounding_box(frame, score_threshold=score_threshold)
+                outputs = self.model(frame_from_video)
             inference_time = time.time() - start_time
 
             # Gets the keypoints from the outputs
-            cropped_human = cropped_human.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            # cropped_human = cropped_human.squeeze(0).permute(1, 2, 0).cpu().numpy()
 
             keypoints = utils.get_keypoints(outputs, None, threshold=score_threshold)
 
@@ -364,7 +364,7 @@ class Metrics:
         Returns:
             float: The jaccard score of the two arrays."""
         metrics = np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
-        return metrics
+        return float(metrics)
     
     def __linear_model(self, 
                        y_true: torch.Tensor, 
