@@ -49,6 +49,7 @@ def database_query(connector: db.MySQLConnection, cursor: db.cursor.MySQLCursor,
         pl.DataFrame: The result of the query."""
     cursor.execute(query)
     result = cursor.fetchall()
+    result = pl.DataFrame(result)
     return result
 
 def database_select_using_pk(

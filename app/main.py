@@ -1,4 +1,4 @@
-from models import SkeletonExtractor, DataPreprocessing, Metrics
+from models import SkeletonExtractor, DataPreprocessing, Metrics, MMPoseStyleSimilarty
 
 from connector import database_connector, database_query, database_select_using_pk, insert_summary_database
 from fastapi import FastAPI, File, UploadFile, Form
@@ -24,9 +24,10 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cuda')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
+mmpose_similarity = MMPoseStyleSimilarty()
 
 os.system("export PYTORCH_ENABLE_MPS_FALLBACK=1")
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -66,10 +67,11 @@ async def registerVideo(
     print(f"[INFO/REGISTER] Extractor threshold: {EXTRACTOR_THRESHOLD}")
 
     video_tensor, video_heigth, video_width = preprocessor.processing(video_file=video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
-    skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=None)
+    skeletons, cropped_skeletons, video_length = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=None)
 
     extracted_skeleton_json = {
         "skeletons": skeletons,
+        "cropped_skeletons": cropped_skeletons,
         "video_length": video_length,
         "video_heigth": video_heigth,
         "video_width": video_width
@@ -115,9 +117,10 @@ async def getMetricsConsumer(
         if not vno in vno_list:     return {"error": "No video number found in database."}
         vno = vno_list.index(vno)
 
-        json_url = result[vno, 7]
+        json_url = result[vno, 6]
+        print(json_url)
         response = requests.get(json_url)
-        guide_skeleton = json.loads(response.text)['skeletons']
+        guide_skeleton = json.loads(response.text)
 
         # Below code will be also used in the database query.
         # JSON URL is the 8th column of the table. VNO is the user selected video number.
@@ -126,39 +129,63 @@ async def getMetricsConsumer(
 
         guide_video_height = json.loads(response.text)['video_heigth']
         guide_video_width = json.loads(response.text)['video_width']
-        video_cut_point = result[vno, 8]
+        video_cut_point = result[vno, 4]
+
+        video_target = result[vno, 8]
     
     else:
         with open("extracted_skeleton.json", "r") as f:
             guide_skeleton = json.load(f)
         guide_video_width, guide_video_height = guide_skeleton['video_width'], guide_skeleton['video_heigth']
         video_lenght = guide_skeleton['video_length']
+        video_target = "SHOULDER"
 
         video_tensor, video_height, video_width = preprocessor.processing(video_file, temp_video_file_path=DUMMY_VIDEO_FILE_NAME)
         video_cut_point = video_lenght
 
     print(f"[INFO/GETMETRICS] Testing flag: {testing_flag}")
 
-    skeletons, frame_count = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=video_cut_point)
+    _, skeletons, frame_count = extractor.extract(video_tensor=video_tensor, score_threshold=EXTRACTOR_THRESHOLD, video_length=video_cut_point)
 
     # Check if the video cut point is in the database.
     if video_cut_point >= frame_count:  video_cut_point = frame_count
     logging.info(f"[INFO/GETMETRICS] Video cut point: {video_cut_point}")
 
     # Calculate metrics 
-    score = metrics.score(
-        y_true=guide_skeleton['skeletons'],
-        true_video_height=guide_video_height,
-        true_video_width=guide_video_width,
-        true_cut_point=video_cut_point,
-        y_pred=skeletons,
-        pred_video_height=video_height,
-        pred_video_width=video_width
+    # score = metrics.score(
+    #     y_true=guide_skeleton['cropped_skeletons'],
+    #     true_video_height=guide_video_height,
+    #     true_video_width=guide_video_width,
+    #     true_cut_point=video_cut_point,
+    #     y_pred=skeletons,
+    #     pred_video_height=video_height,
+    #     pred_video_width=video_width,
+    # )
+    # logging.info(f"[INFO/GETMETRICS] Score Metrics: {score}")
+
+    score = mmpose_similarity.score(
+        guide_skeleton=guide_skeleton['skeletons'], 
+        consumer_skeleton=skeletons
     )
 
     logging.info(f"[INFO/GETMETRICS] Score Metrics: {score}")
 
     return {"metrics": score}
+
+@app.get('/testfiled')
+async def testfiled():
+    json_file = open("extracted_skeleton.json", "r")
+    json_data = json.load(json_file)
+    json_file.close()
+
+    skeleton = json_data['skeletons']
+
+    # nose_skeleton = skeleton['nose']
+    # nose_skeleton = torch.tensor(nose_skeleton)
+    
+    score = mmpose_similarity.score(guide_skeleton=skeleton, consumer_skeleton=skeleton)
+
+    return {"score": score}
 
 @app.get("/getSummary")
 async def getSummary(ano: int):

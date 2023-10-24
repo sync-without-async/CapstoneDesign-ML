@@ -10,7 +10,11 @@ scikit-learn
 
 torch
 torchvision
+transformers
 opencv-python
+denoiser
+
+openai
 
 matplotlib
 tqdm
