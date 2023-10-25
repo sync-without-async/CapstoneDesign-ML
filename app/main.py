@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.exceptions import RequestValidationError
 
-import polars as pl
+import pandas as pd
 import torch
 
 import speech_to_text as stt
@@ -113,11 +113,11 @@ async def getMetricsConsumer(
         if result.shape[0] == 0:    return {"error": "No query found in database."}
 
         # Check if the video number is in the database. 
-        vno_list = result[:, 0].to_list()
+        vno_list = result.iloc[:, 0].tolist()
         if not vno in vno_list:     return {"error": "No video number found in database."}
         vno = vno_list.index(vno)
 
-        json_url = result[vno, 6]
+        json_url = result.iloc[vno, 6]
         print(json_url)
         response = requests.get(json_url)
         guide_skeleton = json.loads(response.text)
@@ -129,9 +129,9 @@ async def getMetricsConsumer(
 
         guide_video_height = json.loads(response.text)['video_heigth']
         guide_video_width = json.loads(response.text)['video_width']
-        video_cut_point = result[vno, 4]
+        video_cut_point = result.iloc[vno, 4]
 
-        video_target = result[vno, 8]
+        video_target = result.iloc[vno, 8]
     
     else:
         with open("extracted_skeleton.json", "r") as f:
@@ -188,17 +188,20 @@ async def testfiled():
     return {"score": score}
 
 @app.get("/getSummary")
-async def getSummary(ano: int):
+async def getSummary(ano: int = Form()):
     connector, cursor = database_connector(database_secret_path="secret_key.json")
     table_name = "audio"
     query = f"SELECT * FROM {table_name}"
 
+    table = pd.DataFrame(database_query(connector, cursor, query, verbose=True), index=None)
+    print(table) 
     result = database_select_using_pk(
-        table=pl.DataFrame(database_query(connector, cursor, query, verbose=False)),
+        table=table,
         pk=ano,
         verbose=True
     )
     print(result)
+    print(result.to_numpy().tolist())
 
     result = result.to_numpy().tolist()[0]
 

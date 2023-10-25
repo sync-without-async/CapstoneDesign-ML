@@ -1,5 +1,5 @@
 import mysql.connector as db
-import polars as pl
+import pandas as pd
 import logging
 import json 
 
@@ -27,7 +27,7 @@ def database_connector(database_secret_path: str = "database_secret.json") -> tu
 
     return connector, cursor
 
-def database_query(connector: db.MySQLConnection, cursor: db.cursor.MySQLCursor, query: str, verbose: bool = False) -> pl.DataFrame:
+def database_query(connector: db.MySQLConnection, cursor: db.cursor.MySQLCursor, query: str, verbose: bool = False) -> pd.DataFrame:
     """Query the database and return the result as a polars dataframe.
     Before using this function, you should connect to the database using database_connector function.
     Connector function will return the connector and the cursor. You should pass the connector and the cursor to this function.
@@ -48,15 +48,15 @@ def database_query(connector: db.MySQLConnection, cursor: db.cursor.MySQLCursor,
     Returns:
         pl.DataFrame: The result of the query."""
     cursor.execute(query)
-    result = cursor.fetchall()
-    result = pl.DataFrame(result)
+    result = list(cursor.fetchall())
+    result = pd.DataFrame(result)
     return result
 
 def database_select_using_pk(
-        table: pl.DataFrame = None,
+        table: pd.DataFrame = None,
         pk: int = None,
         verbose: bool = False
-    ) -> pl.DataFrame:
+    ) -> pd.DataFrame:
     """Select a row using primary key. This function will return the result as a polars dataframe.
     Using polars dataframe, you can easily convert the result to a list or a numpy array. Also, you can easily convert the result to a json object.
     But, the pk column should be the first column of the table. If it is not, you should change the column order.
@@ -81,9 +81,8 @@ def database_select_using_pk(
     if pk is None: raise ValueError(f"pk argument is required. Excepted: str or int, but got {pk}")
 
     if verbose: logging.info(f"Selecting row using primary key...")
-    result = table.filter(
-        table[:, 0] == pk
-    )
+    result = table.loc[table[0] == pk]
+    
     if verbose: logging.info(f"Selected row using primary key.")
 
     if len(result) == 0:
@@ -143,7 +142,6 @@ def insert_summary_database(
     if target_columns is None: 
         target_columns = "summary"
         logging.info(f"target_columns argument is not provided. Using default value: {target_columns}")
-
 
     query_template = f"UPDATE {target_table_name} SET {target_columns} = %s WHERE ano = %s;"
     if verbose: logging.info(f"Executing query: {query_template}")
