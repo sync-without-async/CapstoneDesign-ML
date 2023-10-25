@@ -9,6 +9,7 @@ secret_key.json
 
 *.json
 *.mp4
+*.wav
 
 .vscode
 
