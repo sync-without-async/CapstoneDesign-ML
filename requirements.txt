@@ -2,7 +2,8 @@ fastapi
 uvicorn
 python-multipart
 
-polars
+scipy
+pandas
 numpy
 mysql-connector-python
 scikit-video
