@@ -1,7 +1,7 @@
 from models import SkeletonExtractor, DataPreprocessing, Metrics, MMPoseStyleSimilarty
 
 from connector import database_connector, database_query, database_select_using_pk, insert_summary_database
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
@@ -14,7 +14,6 @@ import speech_to_text as stt
 import denoising as den
 import summary 
 
-import threading
 import requests
 import logging
 import json
@@ -151,7 +150,7 @@ async def getMetricsConsumer(
     if video_cut_point >= frame_count:  video_cut_point = frame_count
     logging.info(f"[INFO/GETMETRICS] Video cut point: {video_cut_point}")
 
-    # Calculate metrics 
+    # Calculate metrics, Originally, we used the metrics from the metrics.py file. But, we changed the metrics to the mmpose_similarity.py file.
     # score = metrics.score(
     #     y_true=guide_skeleton['cropped_skeletons'],
     #     true_video_height=guide_video_height,
@@ -188,7 +187,9 @@ async def testfiled():
     return {"score": score}
 
 @app.get("/getSummary")
-async def getSummary(ano: int = Form()):
+async def getSummary(ano: int = Form(), 
+                     background_tasks: BackgroundTasks = BackgroundTasks()
+    ):
     connector, cursor = database_connector(database_secret_path="secret_key.json")
     table_name = "audio"
     query = f"SELECT * FROM {table_name}"
@@ -215,10 +216,14 @@ async def getSummary(ano: int = Form()):
         doctor_audio, doc_fs = den.load_audio("doctor.wav")
         patient_audio, pat_fs = den.load_audio("patient.wav")
 
-        threading.Thread(
-            target=_do_summary,
-            args=(ano, doctor_audio, patient_audio, doc_fs, pat_fs)
-        ).start()
+        background_tasks.add_task(
+            _do_summary,
+            ano=ano,
+            doctor_audio=doctor_audio,
+            patient_audio=patient_audio,
+            doc_fs=doc_fs,
+            pat_fs=pat_fs
+        )
 
         return True
 
