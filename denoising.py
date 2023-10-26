@@ -1,7 +1,6 @@
 from denoiser.dsp import convert_audio
 from denoiser import pretrained
 
-import numpy as np
 import torchaudio
 import torch
 

@@ -1,7 +1,6 @@
 from tqdm import tqdm
 
 import torchvision.models as models
-import skvideo.io as skvideo
 import numpy as np
 import time
 import cv2
@@ -10,8 +9,6 @@ import torch.nn as nn
 import torch
 
 import utils
-
-from sklearn.metrics import jaccard_score
 
 class SkeletonExtractor:
     def __init__(
