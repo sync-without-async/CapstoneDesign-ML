@@ -513,6 +513,7 @@ class MMPoseStyleSimilarty:
               ) -> float:
         guide_skeleton = self.__get_valid_incidences(skeleton=guide_skeleton)
         consumer_skeleton = self.__get_valid_incidences(skeleton=consumer_skeleton)
+        guide_skeleton, consumer_skeleton = self.__cut_minimum_length(guide_skeleton, consumer_skeleton)
 
         matrix = torch.stack([guide_skeleton, consumer_skeleton], dim=3)
         matrix_clone = matrix.clone()
@@ -537,6 +538,15 @@ class MMPoseStyleSimilarty:
         for idx in range(matrix.shape[0]):
             print(matrix[idx])
         print()
+
+    def __cut_minimum_length(self,
+                             guide_skeleton: torch.Tensor,
+                             consumer_skeleton: torch.Tensor,
+                             ) -> tuple:
+        guide_skeleton_shape, consumer_skeleton_shape = guide_skeleton.shape, consumer_skeleton.shape
+        minimum_length = min(guide_skeleton_shape[1], consumer_skeleton_shape[1])
+        guide_skeleton, consumer_skeleton = guide_skeleton[:, :minimum_length, :], consumer_skeleton[:, :minimum_length, :]
+        return guide_skeleton, consumer_skeleton
 
     def __get_valid_incidences(self, 
                                skeleton: dict = None,
