@@ -2,15 +2,16 @@ fastapi
 uvicorn
 python-multipart
 
-scipy
 pandas
 numpy
-mysql-connector-python==8.0.6
+mysql-connector-python
 scikit-video
+scikit-learn
 
 torch
 torchvision
 transformers
+opencv-python
 
 openai
 

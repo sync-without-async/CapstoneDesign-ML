@@ -1,9 +1,6 @@
 from transformers import (
     Wav2Vec2ForCTC, 
     Wav2Vec2Processor, 
-
-    WhisperProcessor,
-    WhisperForConditionalGeneration,
 )
 
 import numpy as np
@@ -44,6 +41,7 @@ def __feature_extractor(
 
     return transcription
 
+'''
 def speech_to_text_whisper(
         pretrained_model_name_or_path: str = None,
         audio: np.ndarray = None,
@@ -76,6 +74,7 @@ def speech_to_text_whisper(
         device=device,
         verbose=verbose,
     )
+'''
 
 def speech_to_text(
         processor_pretrained_argument: str = None,

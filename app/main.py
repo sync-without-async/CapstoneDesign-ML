@@ -11,7 +11,6 @@ import pandas as pd
 import torch
 
 import speech_to_text as stt
-import denoising as den
 import summary 
 
 import requests
@@ -23,7 +22,7 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cuda')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 mmpose_similarity = MMPoseStyleSimilarty()
@@ -95,7 +94,7 @@ async def getMetricsConsumer(
 
     Returns:
         float or dobuble: The metrics between the consumer's skeleton and the guide's skeleton."""
-    testing_flag = True
+    testing_flag = False
     print(f"[INFO/GETMETRICS] Video get metrics request has been received.")
     print(f"[INFO/GETMETRICS] VNO: {vno}")
     
