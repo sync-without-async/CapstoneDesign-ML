@@ -2,13 +2,14 @@ from tqdm import tqdm
 
 import torchvision.models as models
 import numpy as np
+import torch
 import time
 import cv2
 
-import torch.nn as nn
-import torch
-
+import logging
 import utils
+
+logging.basicConfig(level=logging.INFO)
 
 class SkeletonExtractor:
     def __init__(
@@ -296,35 +297,6 @@ class DataPreprocessing:
 
         return video, video_height, video_width
 
-class MetricsModel(nn.Module):
-    def __init__(self):
-        super(MetricsModel, self).__init__()
-        self.guide_points_skeleton = nn.Linear(34, 128)
-        self.consumer_points_skeleton = nn.Linear(34, 128)
-
-        self.hidden_1 = nn.Linear(256, 256)
-        self.hidden_2 = nn.Linear(256, 128)
-
-        self.score = nn.Sequential(
-            nn.Linear(128, 32),
-            nn.Linear(32, 1)
-        )
-
-        self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, guide_X, user_X):
-        guide_X = self.relu(self.guide_points_skeleton(guide_X))
-        user_X = self.relu(self.consumer_points_skeleton(user_X))
-
-        x = torch.cat((guide_X, user_X), dim=1)
-        x = self.relu(self.hidden_1(x))
-        x = self.relu(self.hidden_2(x))
-        
-        x = self.sigmoid(self.score(x))
-
-        return x
-
 class Metrics:
     def __video_normalize(self, skeleton: dict, video_height: int, video_width: int, cut_point: int):
         """Normalizes the skeleton to the video height and width.
@@ -365,22 +337,6 @@ class Metrics:
         metrics = np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
         metrics = float(metrics)
 
-        return metrics
-
-    def __linear_model(self, 
-                       y_true: torch.Tensor, 
-                       y_pred: torch.Tensor) -> float:
-        model = MetricsModel()
-        model.load_state_dict(
-            torch.load("model.pth", 
-                       map_location=torch.device('cpu')
-        ))
-        model.eval()
-
-        with torch.no_grad():
-            metrics = model(y_true, y_pred)
-        metrics = metrics.cpu().numpy()
-        metrics = np.sum(metrics) / len(metrics)
         return metrics
 
     def __normalized_mean_squared_error(self, y_true, y_pred) -> float:
@@ -509,10 +465,10 @@ class MMPoseStyleSimilarty:
     def score(self, 
               guide_skeleton, 
               consumer_skeleton,
-              keypoint_score_threshold: float = 0.3,
+              execrise_points: str = "NONE"
               ) -> float:
-        guide_skeleton = self.__get_valid_incidences(skeleton=guide_skeleton)
-        consumer_skeleton = self.__get_valid_incidences(skeleton=consumer_skeleton)
+        guide_skeleton = self.__get_valid_incidences(skeleton=guide_skeleton, execrise_points=execrise_points)
+        consumer_skeleton = self.__get_valid_incidences(skeleton=consumer_skeleton, execrise_points=execrise_points)
         guide_skeleton, consumer_skeleton = self.__cut_minimum_length(guide_skeleton, consumer_skeleton)
 
         matrix = torch.stack([guide_skeleton, consumer_skeleton], dim=3)
@@ -524,25 +480,23 @@ class MMPoseStyleSimilarty:
         matrix_clone = matrix.clone()
         matrix_clone[:, :, :, 0] = (matrix_clone[:, :, :, 0] - x_min) / (x_max - x_min + 1e-5)
         matrix_clone[:, :, :, 1] = (matrix_clone[:, :, :, 1] - y_min) / (y_max - y_min + 1e-5)
+        normalized_matrix = matrix_clone.clone()
+
         xy_dist = matrix_clone[:, :, :, 0] - matrix_clone[:, :, :, 1] 
         score = matrix_clone[:, :, :, 0] * matrix_clone[:, :, :, 1]
 
         similarty = (torch.exp(-50 * xy_dist.pow(2).sum(dim=-1).unsqueeze(-1)) * score).sum(dim=-1) / score.sum(dim=-1) + 1e-6
         similarty[similarty.isnan()] = 0.0
         print(f"Similarty Vector: {similarty}")
+        print(f"Normalized Matrix ranges from {normalized_matrix.min()} to {normalized_matrix.max()}")
 
         similarty = similarty.mean().item()
         return similarty
 
-    def __print_matrix(self, matrix):
-        for idx in range(matrix.shape[0]):
-            print(matrix[idx])
-        print()
-
     def __cut_minimum_length(self,
                              guide_skeleton: torch.Tensor,
                              consumer_skeleton: torch.Tensor,
-                             ) -> tuple:
+                             ) -> tuple:        
         guide_skeleton_shape, consumer_skeleton_shape = guide_skeleton.shape, consumer_skeleton.shape
         minimum_length = min(guide_skeleton_shape[1], consumer_skeleton_shape[1])
         guide_skeleton, consumer_skeleton = guide_skeleton[:, :minimum_length, :], consumer_skeleton[:, :minimum_length, :]
@@ -551,6 +505,7 @@ class MMPoseStyleSimilarty:
     def __get_valid_incidences(self, 
                                skeleton: dict = None,
                                valid_incidences: np.ndarray = None,
+                               execute_points: str = "NONE",
                                ) -> torch.Tensor:
         """Returns the valid incidences of the skeleton.
         The valid incidences are as follows:
@@ -561,9 +516,31 @@ class MMPoseStyleSimilarty:
 
         Returns:
             dict: The valid incidences of the skeleton."""
-        if valid_incidences is None:
+        # Default valid incidences
+        if valid_incidences is None and execute_points == "NONE":
+            logging.warning(f"[WARNING/GET_VALID_INCIDENCES] No valid incidences specified. Using default valid incidences.")
             valid_incidences = np.array([0]) + list(range(5, 17))
             valid_incidences = np.array(valid_incidences) 
+
+        # Arm valid incidences
+        elif valid_incidences is None and execute_points == "ARM":
+            valid_incidences = np.array([0]) + list(range(5, 6, 7, 8, 9, 10))   # Nose, Left Shoulder, Right Shoulder, Left Elbow, Right Elbow, Left Wrist, Right Wrist
+            valid_incidences = np.array(valid_incidences)
+
+        # Shoulder valid incidences
+        elif valid_incidences is None and execute_points == "SHOULDER":
+            valid_incidences = np.array([0]) + list(range(5, 6, 7, 8, 9, 10))   # Nose, Left Shoulder, Right Shoulder, Left Elbow, Right Elbow, Left Wrist, Right Wrist
+            valid_incidences = np.array(valid_incidences)
+
+        # Knee valid incidences
+        elif valid_incidences is None and execute_points == "KNEE":
+            valid_incidences = np.array([0]) + list(range(11, 12, 13, 14, 15, 16))  # Nose, Left Hip, Right Hip, Left Knee, Right Knee, Left Ankle, Right Ankle
+            valid_incidences = np.array(valid_incidences)
+
+        # Thighs valid incidences
+        elif valid_incidences is None and execute_points == "THIGHS":
+            valid_incidences = np.array([0]) + list(range(11, 12, 13, 14))  # Nose, Left Hip, Right Hip, Left Knee, Right Knee
+            valid_incidences = np.array(valid_incidences)
 
         key_match_incidences = []
         for idx, key in enumerate(skeleton.keys()):

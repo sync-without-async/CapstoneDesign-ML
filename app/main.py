@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 
 import speech_to_text as stt
+import denoising as den
 import summary 
 
 import requests
@@ -163,7 +164,8 @@ async def getMetricsConsumer(
 
     score = mmpose_similarity.score(
         guide_skeleton=guide_skeleton['skeletons'], 
-        consumer_skeleton=skeletons
+        consumer_skeleton=skeletons,
+        execrise_points=video_target,
     )
 
     logging.info(f"[INFO/GETMETRICS] Score Metrics: {score}")
