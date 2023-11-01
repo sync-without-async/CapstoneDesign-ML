@@ -443,8 +443,8 @@ class Metrics:
         Returns:
             float: The score of the two arrays.""" 
         
-        # y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
-        # y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
+        y_true = self.__video_normalize(y_true, true_video_height, true_video_width, true_cut_point)
+        y_pred = self.__video_normalize(y_pred, pred_video_height, pred_video_width, true_cut_point)
 
         y_true_values, y_pred_values = [], []
         for key in y_true.keys():
@@ -457,7 +457,7 @@ class Metrics:
         minmum_length = min(y_true_values.shape[0], y_pred_values.shape[0])
         y_true_values, y_pred_values = y_true_values[:minmum_length, :], y_pred_values[:minmum_length, :]
 
-        metrics_score = self.__linear_model(y_true_values, y_pred_values)
+        metrics_score = self.__jaccard_score(y_true_values, y_pred_values)
 
         return metrics_score
     
@@ -467,8 +467,8 @@ class MMPoseStyleSimilarty:
               consumer_skeleton,
               execrise_points: str = "NONE"
               ) -> float:
-        guide_skeleton = self.__get_valid_incidences(skeleton=guide_skeleton, execrise_points=execrise_points)
-        consumer_skeleton = self.__get_valid_incidences(skeleton=consumer_skeleton, execrise_points=execrise_points)
+        guide_skeleton = self.__get_valid_incidences(skeleton=guide_skeleton, execute_points=execrise_points)
+        consumer_skeleton = self.__get_valid_incidences(skeleton=consumer_skeleton, execute_points=execrise_points)
         guide_skeleton, consumer_skeleton = self.__cut_minimum_length(guide_skeleton, consumer_skeleton)
 
         matrix = torch.stack([guide_skeleton, consumer_skeleton], dim=3)
@@ -485,7 +485,7 @@ class MMPoseStyleSimilarty:
         xy_dist = matrix_clone[:, :, :, 0] - matrix_clone[:, :, :, 1] 
         score = matrix_clone[:, :, :, 0] * matrix_clone[:, :, :, 1]
 
-        similarty = (torch.exp(-50 * xy_dist.pow(2).sum(dim=-1).unsqueeze(-1)) * score).sum(dim=-1) / score.sum(dim=-1) + 1e-6
+        similarty = (torch.exp(-300 * xy_dist.pow(2).sum(dim=-1).unsqueeze(-1)) * score).sum(dim=-1) / score.sum(dim=-1) + 1e-6
         similarty[similarty.isnan()] = 0.0
         print(f"Similarty Vector: {similarty}")
         print(f"Normalized Matrix ranges from {normalized_matrix.min()} to {normalized_matrix.max()}")
@@ -524,22 +524,22 @@ class MMPoseStyleSimilarty:
 
         # Arm valid incidences
         elif valid_incidences is None and execute_points == "ARM":
-            valid_incidences = np.array([0]) + list(range(5, 6, 7, 8, 9, 10))   # Nose, Left Shoulder, Right Shoulder, Left Elbow, Right Elbow, Left Wrist, Right Wrist
+            valid_incidences = np.array([0]) + [5, 6, 7, 8, 9, 10]   # Nose, Left Shoulder, Right Shoulder, Left Elbow, Right Elbow, Left Wrist, Right Wrist
             valid_incidences = np.array(valid_incidences)
 
         # Shoulder valid incidences
         elif valid_incidences is None and execute_points == "SHOULDER":
-            valid_incidences = np.array([0]) + list(range(5, 6, 7, 8, 9, 10))   # Nose, Left Shoulder, Right Shoulder, Left Elbow, Right Elbow, Left Wrist, Right Wrist
+            valid_incidences = np.array([0]) + [5, 6, 7, 8, 9, 10]  # Nose, Left Shoulder, Right Shoulder, Left Elbow, Right Elbow, Left Wrist, Right Wrist
             valid_incidences = np.array(valid_incidences)
 
         # Knee valid incidences
         elif valid_incidences is None and execute_points == "KNEE":
-            valid_incidences = np.array([0]) + list(range(11, 12, 13, 14, 15, 16))  # Nose, Left Hip, Right Hip, Left Knee, Right Knee, Left Ankle, Right Ankle
+            valid_incidences = np.array([0]) + [11, 12, 13, 14, 15, 16]  # Nose, Left Hip, Right Hip, Left Knee, Right Knee, Left Ankle, Right Ankle
             valid_incidences = np.array(valid_incidences)
 
         # Thighs valid incidences
         elif valid_incidences is None and execute_points == "THIGHS":
-            valid_incidences = np.array([0]) + list(range(11, 12, 13, 14))  # Nose, Left Hip, Right Hip, Left Knee, Right Knee
+            valid_incidences = np.array([0]) + [11, 12, 13, 14]  # Nose, Left Hip, Right Hip, Left Knee, Right Knee
             valid_incidences = np.array(valid_incidences)
 
         key_match_incidences = []
