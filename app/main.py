@@ -150,21 +150,21 @@ async def getMetricsConsumer(
     if video_cut_point >= frame_count:  video_cut_point = frame_count
     logging.info(f"[INFO/GETMETRICS] Video cut point: {video_cut_point}")
 
-    # score = mmpose_similarity.score(
-    #     guide_skeleton=guide_skeleton['skeletons'], 
-    #     consumer_skeleton=skeletons,
-    #     execrise_points=video_target,
-    # )
-
-    score = metrics.score(
-        y_true=guide_skeleton['cropped_skeletons'],
-        true_video_height=guide_video_height,
-        true_video_width=guide_video_width,
-        true_cut_point=video_cut_point,
-        y_pred=cropped_skeletons,
-        pred_video_height=video_height,
-        pred_video_width=video_width,
+    score = mmpose_similarity.score(
+        guide_skeleton=guide_skeleton['skeletons'], 
+        consumer_skeleton=skeletons,
+        execrise_points="NONE",
     )
+
+    # score = metrics.score(
+    #     y_true=guide_skeleton['cropped_skeletons'],
+    #     true_video_height=guide_video_height,
+    #     true_video_width=guide_video_width,
+    #     true_cut_point=video_cut_point,
+    #     y_pred=cropped_skeletons,
+    #     pred_video_height=video_height,
+    #     pred_video_width=video_width,
+    # )
 
     logging.info(f"[INFO/GETMETRICS] Score Metrics: {score}")
 
