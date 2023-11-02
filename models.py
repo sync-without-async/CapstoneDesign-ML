@@ -485,7 +485,7 @@ class MMPoseStyleSimilarty:
         xy_dist = matrix_clone[:, :, :, 0] - matrix_clone[:, :, :, 1] 
         score = matrix_clone[:, :, :, 0] * matrix_clone[:, :, :, 1]
 
-        similarty = (torch.exp(-250 * xy_dist.pow(2).sum(dim=-1).unsqueeze(-1)) * score).sum(dim=-1) / score.sum(dim=-1) + 1e-6
+        similarty = (torch.exp(-50 * xy_dist.pow(2).sum(dim=-1).unsqueeze(-1)) * score).sum(dim=-1) / score.sum(dim=-1) + 1e-6
         similarty[similarty.isnan()] = 0.0
         print(f"Similarty Vector: {similarty}")
         print(f"Normalized Matrix ranges from {normalized_matrix.min()} to {normalized_matrix.max()}")

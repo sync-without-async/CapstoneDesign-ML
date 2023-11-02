@@ -153,7 +153,7 @@ async def getMetricsConsumer(
     score = mmpose_similarity.score(
         guide_skeleton=guide_skeleton['skeletons'], 
         consumer_skeleton=skeletons,
-        execrise_points="NONE",
+        execrise_points=video_target,
     )
 
     # score = metrics.score(
