@@ -1,5 +1,7 @@
 from tqdm import tqdm
 
+from ultralytics import YOLO
+
 import torchvision.models as models
 import numpy as np
 import torch
@@ -57,6 +59,10 @@ class SkeletonExtractor:
             pretrained=self.pretrained_bool,
             progress=False
         ).to(self.device).eval()
+
+        self.yolov8_model = YOLO(
+            "yolov8n-pose.pt"
+        )
 
     def __bounding_box(self, video_tensor: torch.Tensor, score_threshold: float = 0.9) -> torch.Tensor:
         """Returns the bounding box of the video.
