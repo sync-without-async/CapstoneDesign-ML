@@ -1,15 +1,17 @@
 from tqdm import tqdm
 
+from ultralytics import YOLO
+
 import torchvision.models as models
-import skvideo.io as skvideo
 import numpy as np
 import torch
-import utils
 import time
 import cv2
-import os
 
-from sklearn.metrics import jaccard_score
+import logging
+import utils
+
+logging.basicConfig(level=logging.INFO)
 
 class SkeletonExtractor:
     def __init__(
@@ -49,8 +51,40 @@ class SkeletonExtractor:
             num_keypoints=self.number_of_keypoints,
             progress=False
         ).to(self.device).eval()
-   
-    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.9, video_length: float = None) -> dict:
+
+        self.bounding_box_model = getattr(
+            models.detection,
+            "fasterrcnn_resnet50_fpn"
+        )(
+            pretrained=self.pretrained_bool,
+            progress=False
+        ).to(self.device).eval()
+
+        self.yolov8_model = YOLO(
+            "yolov8l-pose.pt"
+        )
+
+        self.key_mapping = {
+            0: 'nose',
+            1: 'left_eye',
+            2: 'right_eye',
+            3: 'left_ear', 
+            4: 'right_ear', 
+            5: 'left_shoulder', 
+            6: 'right_shoulder',
+            7: 'left_elbow', 
+            8: 'right_elbow',
+            9: 'left_wrist', 
+            10: 'right_wrist',
+            11: 'left_hip', 
+            12: 'right_hip',
+            13: 'left_knee', 
+            14: 'right_knee',
+            15: 'left_ankle', 
+            16: 'right_ankle',
+        }
+
+    def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.93, video_length: float = 0.0) -> tuple:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
 
         Args:
@@ -71,6 +105,7 @@ class SkeletonExtractor:
 
         total_fps, frame_count = 0., 0.
         extracted_skeletons = self.__extract_keypoint_mapping({})
+        extracted_skeletons_cropped = self.__extract_keypoint_mapping({})
         pbar = tqdm(desc=f"Extracting skeletons from video", total=video_length, unit="frames")
 
         while True:
@@ -79,26 +114,37 @@ class SkeletonExtractor:
             if frame_count == video_length: break
             
             # Preprocesses the frame
-            frame_from_video = np.array(frame, dtype=np.float32) / 255.0
-            frame_from_video = torch.Tensor(frame_from_video).permute(2, 0, 1)
-            frame_from_video = frame_from_video.unsqueeze(0)
-            frame_from_video = frame_from_video.float().to(self.device)
+            frame_from_video = np.array(frame, dtype=np.float32)
+            frame_from_video = torch.Tensor(frame_from_video)
+            frame_from_video = frame_from_video.float().numpy()
 
             # Runs the model on the frame and gets the keypoints
             start_time = time.time()
-            with torch.no_grad():
-                outputs = self.model(frame_from_video)
+
+            # Cropping the image (YoloV8)
+            get_bounding_box = self.yolov8_model.predict(frame_from_video)[0].boxes.xyxy[0]
+            print(get_bounding_box)
+
+            left_top = (get_bounding_box[0], get_bounding_box[1])
+            right_top = (get_bounding_box[2], get_bounding_box[1])
+            left_bottom = (get_bounding_box[0], get_bounding_box[3])
+            right_bottom = (get_bounding_box[2], get_bounding_box[3])
+            cropping_pts = np.array([left_top, right_top, left_bottom, right_bottom])
+            
+            cropped_image = frame_from_video[int(left_top[1]):int(right_bottom[1]), int(left_top[0]):int(right_bottom[0])]
+            cropped_image = cv2.resize(cropped_image, (256, 512))
+
+            # Skeleton Extraction
+            keypoints = self.yolov8_model.predict(frame_from_video)[0].keypoints.xy[0]
+            keypoints_cropped = self.yolov8_model.predict(cropped_image)[0].keypoints.xy[0]
+
             inference_time = time.time() - start_time
 
-            # Gets the keypoints from the outputs
-            keypoints = utils.get_keypoints(outputs, None, threshold=score_threshold)
-            output_image = utils.draw_keypoints(outputs, frame)
+            # Adds the keypoints to the input mapping
+            extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
+            extracted_skeletons_cropped = self.__add_keypoints(keypoints_cropped, extracted_skeletons_cropped)
 
-            try:
-                extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
-            except:
-                extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
-            
+            # Calculates the FPS
             fps = 1.0 / inference_time
             total_fps += fps
             frame_count += 1
@@ -106,12 +152,10 @@ class SkeletonExtractor:
             pbar.set_postfix({"FPS": f"{fps:.2f}", "Average FPS": f"{total_fps / frame_count:.2f}"})
             pbar.update(1)
 
-            cv2.imshow("Output", output_image)
-            if cv2.waitKey(1) & 0xFF == ord('q'): break
         pbar.close()
-        cv2.destroyAllWindows()
 
-        return extracted_skeletons, frame_count
+        # return extracted_skeletons, extracted_skeletons_cropped, frame_count
+        return extracted_skeletons, extracted_skeletons_cropped, frame_count
 
     def __add_none_keypoints(self, input_mapping: dict) -> dict:
         """Adds None keypoints to the input mapping.
@@ -122,11 +166,22 @@ class SkeletonExtractor:
 
         Returns:
             dict: The input mapping with the None keypoints added."""
-        for idx in range(17):
-            input_mapping[self.__return_keypoint_name_from_index(idx)].append((0, 0))
-        return input_mapping
 
-    def __add_keypoints(self, keypoints: list, input_mapping: dict) -> dict:
+        dict_input_mapping = dict()
+        for key in self.key_mapping:
+            dict_input_mapping[self.key_mapping[key]] = []
+
+        if type(input_mapping) == list:
+            for idx in range(len(input_mapping)):
+                dict_input_mapping[self.key_mapping[idx]] = input_mapping[idx]
+            return dict_input_mapping
+
+        else: 
+            for idx in range(17):
+                input_mapping[self.__return_keypoint_name_from_index(idx)].append((0, 0))
+            return input_mapping
+
+    def __add_keypoints(self, keypoints, input_mapping):
         """Adds the keypoints to the input mapping.
         Keypoints are indexed from 0 to 16. The index number corresponds to the index of the keypoint in the list of keypoints.
         
@@ -273,7 +328,8 @@ class Metrics:
 
         return skeleton
 
-    def __jaccard_score(self, y_true: list, y_pred: list) -> float:
+    def __jaccard_score(self, 
+                        y_true, y_pred) -> float:
         """Returns the jaccard score of the two arrays.
         The jaccard score is calculated as follows:
             jaccard_score = (y_true & y_pred).sum() / (y_true | y_pred).sum()
@@ -284,10 +340,13 @@ class Metrics:
 
         Returns:
             float: The jaccard score of the two arrays."""
+        y_true, y_pred = np.array(y_true), np.array(y_pred)        
         metrics = np.sum(np.min([y_true, y_pred], axis=0)) / np.sum(np.max([y_true, y_pred], axis=0))
+        metrics = float(metrics)
+
         return metrics
 
-    def __normalized_mean_squared_error(self, y_true: list, y_pred: list) -> float:
+    def __normalized_mean_squared_error(self, y_true, y_pred) -> float:
         """Returns the normalized mean squared error of the two arrays.
         The normalized mean squared error is calculated as follows:
             normalized_mean_squared_error = (y_true - y_pred)^2 / (y_true - y_true.mean())^2
@@ -302,6 +361,76 @@ class Metrics:
         
         metrics = np.sum((y_true - y_pred) ** 2) / np.sum((y_true - y_true.mean()) ** 2)
         return metrics
+    
+    def weighted_score(self,
+                       wegiht_target_part: str,
+                       y_true: dict, true_video_height: int, true_video_width: int, true_cut_point: int,
+                       y_pred: dict, pred_video_height: int, pred_video_width: int) -> float:
+        wegiht_target_part = wegiht_target_part.upper()
+        weighted_y_true, weighted_y_pred = [], []
+
+        if wegiht_target_part == "SHOULDER":
+            for key in y_true.keys():
+                if key == "left_shoulder"   \
+                or key == "right_shoulder"  \
+                or key == "left_elbow"      \
+                or key == "right_elbow"     \
+                or key == "left_wrist"      \
+                or key == "right_wrist":
+                    weighted_y_true.extend(y_true[key] * 0.9)
+                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                else:
+                    weighted_y_true.extend(y_true[key] * 0.1)
+                    weighted_y_pred.extend(y_pred[key] * 0.1)           
+
+        elif wegiht_target_part == "KNEE":
+            for key in y_true.keys():
+                if key == "left_knee"   \
+                or key == "right_knee"  \
+                or key == "left_hip"    \
+                or key == "right_hip"   \
+                or key == "left_ankle"  \
+                or key == "right_ankle":
+                    weighted_y_true.extend(y_true[key] * 0.9)
+                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                else:
+                    weighted_y_true.extend(y_true[key] * 0.1)
+                    weighted_y_pred.extend(y_pred[key] * 0.1)
+
+        elif wegiht_target_part == "THIGHS":
+            for key in y_true.keys():
+                if key == "left_knee"   \
+                or key == "right_knee"  \
+                or key == "left_hip"    \
+                or key == "right_hip":
+                    weighted_y_true.extend(y_true[key] * 0.9)
+                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                else:
+                    weighted_y_true.extend(y_true[key] * 0.1)
+                    weighted_y_pred.extend(y_pred[key] * 0.1)
+
+        elif wegiht_target_part == "ARMS":
+            for key in y_true.keys():
+                if key == "left_shoulder"   \
+                or key == "right_shoulder"  \
+                or key == "left_elbow"      \
+                or key == "right_elbow"     \
+                or key == "left_wrist"      \
+                or key == "right_wrist":
+                    weighted_y_true.extend(y_true[key] * 0.9)
+                    weighted_y_pred.extend(y_pred[key] * 0.9)
+                else:
+                    weighted_y_true.extend(y_true[key] * 0.1)
+                    weighted_y_pred.extend(y_pred[key] * 0.1)
+
+        else:
+            raise ValueError(f"Invalid target part: {wegiht_target_part}")
+
+        minimum_length = min(len(weighted_y_true), len(weighted_y_pred))
+        weighted_y_true, weighted_y_pred = weighted_y_true[:minimum_length], weighted_y_pred[:minimum_length]
+
+        metrics_score = self.__jaccard_score(weighted_y_true, weighted_y_pred)
+        return metrics_score
 
     def score(self, 
               y_true: dict, true_video_height: int, true_video_width: int, true_cut_point: int,
@@ -329,8 +458,104 @@ class Metrics:
             y_true_value, y_pred_value = y_true[key], y_pred[key]
             y_true_values.extend(y_true_value)
             y_pred_values.extend(y_pred_value)
+        y_true_values, y_pred_values = torch.Tensor(y_true_values), torch.Tensor(y_pred_values)
+        y_true_values, y_pred_values = y_true_values.view(-1, 34), y_pred_values.view(-1, 34)
 
-        jaccard_score = self.__jaccard_score(y_true_values, y_pred_values)
-        score = jaccard_score
+        minmum_length = min(y_true_values.shape[0], y_pred_values.shape[0])
+        y_true_values, y_pred_values = y_true_values[:minmum_length, :], y_pred_values[:minmum_length, :]
 
-        return score
+        metrics_score = self.__jaccard_score(y_true_values, y_pred_values)
+
+        return metrics_score
+    
+class MMPoseStyleSimilarty:
+    def score(self, 
+              guide_skeleton, 
+              consumer_skeleton,
+              execrise_points: str = "NONE"
+              ) -> float:
+        guide_skeleton = self.__get_valid_incidences(skeleton=guide_skeleton, execute_points=execrise_points)
+        consumer_skeleton = self.__get_valid_incidences(skeleton=consumer_skeleton, execute_points=execrise_points)
+        guide_skeleton, consumer_skeleton = self.__cut_minimum_length(guide_skeleton, consumer_skeleton)
+
+        matrix = torch.stack([guide_skeleton, consumer_skeleton], dim=3)
+        matrix_clone = matrix.clone()
+        matrix_clone[matrix == 0.0] = 256.0
+        x_min, y_min = matrix_clone.narrow(3, 0, 1).min(dim=2).values, matrix_clone.narrow(3, 1, 1).min(dim=2).values
+        x_max, y_max = matrix_clone.narrow(3, 0, 1).max(dim=2).values, matrix_clone.narrow(3, 1, 1).max(dim=2).values
+
+        matrix_clone = matrix.clone()
+        matrix_clone[:, :, :, 0] = (matrix_clone[:, :, :, 0] - x_min) / (x_max - x_min + 1e-5)
+        matrix_clone[:, :, :, 1] = (matrix_clone[:, :, :, 1] - y_min) / (y_max - y_min + 1e-5)
+        normalized_matrix = matrix_clone.clone()
+
+        xy_dist = matrix_clone[:, :, :, 0] - matrix_clone[:, :, :, 1] 
+        score = matrix_clone[:, :, :, 0] * matrix_clone[:, :, :, 1]
+
+        similarty = (torch.exp(-50 * xy_dist.pow(2).sum(dim=-1).unsqueeze(-1)) * score).sum(dim=-1) / score.sum(dim=-1) + 1e-6
+        similarty[similarty.isnan()] = 0.0
+        print(f"Similarty Vector: {similarty}")
+        print(f"Normalized Matrix ranges from {normalized_matrix.min()} to {normalized_matrix.max()}")
+
+        similarty = similarty.mean().item()
+        return similarty
+
+    def __cut_minimum_length(self,
+                             guide_skeleton: torch.Tensor,
+                             consumer_skeleton: torch.Tensor,
+                             ) -> tuple:        
+        guide_skeleton_shape, consumer_skeleton_shape = guide_skeleton.shape, consumer_skeleton.shape
+        minimum_length = min(guide_skeleton_shape[1], consumer_skeleton_shape[1])
+        guide_skeleton, consumer_skeleton = guide_skeleton[:, :minimum_length, :], consumer_skeleton[:, :minimum_length, :]
+        return guide_skeleton, consumer_skeleton
+
+    def __get_valid_incidences(self, 
+                               skeleton: dict = None,
+                               valid_incidences: np.ndarray = None,
+                               execute_points: str = "NONE",
+                               ) -> torch.Tensor:
+        """Returns the valid incidences of the skeleton.
+        The valid incidences are as follows:
+            valid_incidences = [0] + list(range(5, 17))
+
+        Args:
+            skeleton (dict): The skeleton to get the valid incidences from.
+
+        Returns:
+            dict: The valid incidences of the skeleton."""
+        # Default valid incidences
+        if valid_incidences is None and execute_points == "NONE":
+            logging.warning(f"[WARNING/GET_VALID_INCIDENCES] No valid incidences specified. Using default valid incidences.")
+            valid_incidences = np.array([0]) + list(range(5, 17))
+            valid_incidences = np.array(valid_incidences) 
+
+        # Arm valid incidences
+        elif valid_incidences is None and execute_points == "ARM":
+            valid_incidences = np.array([0]) + [5, 6, 7, 8, 9, 10]   # Nose, Left Shoulder, Right Shoulder, Left Elbow, Right Elbow, Left Wrist, Right Wrist
+            valid_incidences = np.array(valid_incidences)
+
+        # Shoulder valid incidences
+        elif valid_incidences is None and execute_points == "SHOULDER":
+            valid_incidences = np.array([0]) + [5, 6, 7, 8, 9, 10]  # Nose, Left Shoulder, Right Shoulder, Left Elbow, Right Elbow, Left Wrist, Right Wrist
+            valid_incidences = np.array(valid_incidences)
+
+        # Knee valid incidences
+        elif valid_incidences is None and execute_points == "KNEE":
+            valid_incidences = np.array([0]) + [11, 12, 13, 14, 15, 16]  # Nose, Left Hip, Right Hip, Left Knee, Right Knee, Left Ankle, Right Ankle
+            valid_incidences = np.array(valid_incidences)
+
+        # Thighs valid incidences
+        elif valid_incidences is None and execute_points == "THIGHS":
+            valid_incidences = np.array([0]) + [11, 12, 13, 14]  # Nose, Left Hip, Right Hip, Left Knee, Right Knee
+            valid_incidences = np.array(valid_incidences)
+
+        key_match_incidences = []
+        for idx, key in enumerate(skeleton.keys()):
+            if idx in valid_incidences: key_match_incidences.append(key)
+
+        valid_incidences = []
+        for key in key_match_incidences:
+            valid_incidences.append(skeleton[key])
+
+        valid_incidences = torch.Tensor(valid_incidences)
+        return valid_incidences
