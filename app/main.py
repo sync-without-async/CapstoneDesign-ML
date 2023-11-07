@@ -150,6 +150,9 @@ async def getMetricsConsumer(
     if video_cut_point >= frame_count:  video_cut_point = frame_count
     logging.info(f"[INFO/GETMETRICS] Video cut point: {video_cut_point}")
 
+    print(guide_skeleton)
+    print(skeletons)
+
     score = mmpose_similarity.score(
         guide_skeleton=guide_skeleton['skeletons'], 
         consumer_skeleton=skeletons,
