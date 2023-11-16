@@ -1,5 +1,7 @@
 from tqdm import tqdm
 
+from ultralytics import YOLO
+
 import torchvision.models as models
 import numpy as np
 import torch
@@ -58,44 +60,30 @@ class SkeletonExtractor:
             progress=False
         ).to(self.device).eval()
 
-    def __bounding_box(self, video_tensor: torch.Tensor, score_threshold: float = 0.9) -> torch.Tensor:
-        """Returns the bounding box of the video.
-        The bounding box is calculated as follows:
-            bounding_box = (x1, y1, x2, y2)
+        self.yolov8_model = YOLO(
+            "yolov8l-pose.pt"
+        )
 
-        Args:
-            video_tensor (np.ndarray): The video to extract the bounding box from.
-            score_threshold (float, optional): The minimum score for a bounding box to be extracted. Defaults to 0.9.
+        self.key_mapping = {
+            0: 'nose',
+            1: 'left_eye',
+            2: 'right_eye',
+            3: 'left_ear', 
+            4: 'right_ear', 
+            5: 'left_shoulder', 
+            6: 'right_shoulder',
+            7: 'left_elbow', 
+            8: 'right_elbow',
+            9: 'left_wrist', 
+            10: 'right_wrist',
+            11: 'left_hip', 
+            12: 'right_hip',
+            13: 'left_knee', 
+            14: 'right_knee',
+            15: 'left_ankle', 
+            16: 'right_ankle',
+        }
 
-        Returns:
-            list: The bounding box of the video."""
-        video_tensor = torch.from_numpy(video_tensor).permute(2, 0, 1).unsqueeze(0).float().to(self.device)
-        video_tensor = video_tensor / 255.0
-
-        with torch.no_grad():
-            outputs = self.bounding_box_model(video_tensor)
-
-        cropped_image = []
-        for idx in range(len(outputs[0])):
-            box_coord = outputs[0]['boxes'][idx]
-            box_score = outputs[0]['scores'][idx]
-            box_label = outputs[0]['labels'][idx]
-
-            if box_score > score_threshold and box_label == 1:
-                box_coord = box_coord.cpu().numpy()
-                box_coord = box_coord.astype(int)
-
-                x1, y1, x2, y2 = box_coord[0], box_coord[1], box_coord[2], box_coord[3]
-                cropped_image = video_tensor[0, :, y1:y2, x1:x2]
-                cropped_image = cropped_image.permute(1, 2, 0).cpu().numpy()
-                break
-
-        cropped_image = cv2.resize(cropped_image, (256, 512))
-        cropped_image = torch.Tensor(cropped_image).permute(2, 0, 1)
-        cropped_image = cropped_image.unsqueeze(0).float().to(self.device)
-
-        return cropped_image
-   
     def extract(self, video_tensor: cv2.VideoCapture, score_threshold: float = 0.93, video_length: float = 0.0) -> tuple:
         """Extracts skeletons from a video using the model loaded onto the device specified in the constructor.
 
@@ -126,30 +114,37 @@ class SkeletonExtractor:
             if frame_count == video_length: break
             
             # Preprocesses the frame
-            frame_from_video = np.array(frame, dtype=np.float32) / 255.0
-            frame_from_video = torch.Tensor(frame_from_video).permute(2, 0, 1)
-            frame_from_video = frame_from_video.unsqueeze(0)
-            frame_from_video = frame_from_video.float().to(self.device)
+            frame_from_video = np.array(frame, dtype=np.float32)
+            frame_from_video = torch.Tensor(frame_from_video)
+            frame_from_video = frame_from_video.float().numpy()
 
             # Runs the model on the frame and gets the keypoints
             start_time = time.time()
-            with torch.no_grad():
-                cropped_human = self.__bounding_box(frame, score_threshold=score_threshold)
 
-                cropped_output = self.model(cropped_human)
-                outputs = self.model(frame_from_video)
+            # Cropping the image (YoloV8)
+            get_bounding_box = self.yolov8_model.predict(frame_from_video)[0].boxes.xyxy[0]
+            print(get_bounding_box)
+
+            left_top = (get_bounding_box[0], get_bounding_box[1])
+            right_top = (get_bounding_box[2], get_bounding_box[1])
+            left_bottom = (get_bounding_box[0], get_bounding_box[3])
+            right_bottom = (get_bounding_box[2], get_bounding_box[3])
+            cropping_pts = np.array([left_top, right_top, left_bottom, right_bottom])
+            
+            cropped_image = frame_from_video[int(left_top[1]):int(right_bottom[1]), int(left_top[0]):int(right_bottom[0])]
+            cropped_image = cv2.resize(cropped_image, (256, 512))
+
+            # Skeleton Extraction
+            keypoints = self.yolov8_model.predict(frame_from_video)[0].keypoints.xy[0]
+            keypoints_cropped = self.yolov8_model.predict(cropped_image)[0].keypoints.xy[0]
+
             inference_time = time.time() - start_time
 
-            keypoints = utils.get_keypoints(outputs, None, threshold=score_threshold)
-            keypoints_cropped = utils.get_keypoints(cropped_output, None, threshold=score_threshold)
+            # Adds the keypoints to the input mapping
+            extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
+            extracted_skeletons_cropped = self.__add_keypoints(keypoints_cropped, extracted_skeletons_cropped)
 
-            try:
-                extracted_skeletons = self.__add_keypoints(keypoints, extracted_skeletons)
-                extracted_skeletons_cropped = self.__add_keypoints(keypoints_cropped, extracted_skeletons_cropped)
-            except:
-                extracted_skeletons = self.__add_none_keypoints(extracted_skeletons)
-                extracted_skeletons_cropped = self.__add_none_keypoints(extracted_skeletons_cropped)
-            
+            # Calculates the FPS
             fps = 1.0 / inference_time
             total_fps += fps
             frame_count += 1
@@ -159,6 +154,7 @@ class SkeletonExtractor:
 
         pbar.close()
 
+        # return extracted_skeletons, extracted_skeletons_cropped, frame_count
         return extracted_skeletons, extracted_skeletons_cropped, frame_count
 
     def __add_none_keypoints(self, input_mapping: dict) -> dict:
@@ -170,9 +166,20 @@ class SkeletonExtractor:
 
         Returns:
             dict: The input mapping with the None keypoints added."""
-        for idx in range(17):
-            input_mapping[self.__return_keypoint_name_from_index(idx)].append((0, 0))
-        return input_mapping
+
+        dict_input_mapping = dict()
+        for key in self.key_mapping:
+            dict_input_mapping[self.key_mapping[key]] = []
+
+        if type(input_mapping) == list:
+            for idx in range(len(input_mapping)):
+                dict_input_mapping[self.key_mapping[idx]] = input_mapping[idx]
+            return dict_input_mapping
+
+        else: 
+            for idx in range(17):
+                input_mapping[self.__return_keypoint_name_from_index(idx)].append((0, 0))
+            return input_mapping
 
     def __add_keypoints(self, keypoints, input_mapping):
         """Adds the keypoints to the input mapping.

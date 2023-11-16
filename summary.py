@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO, format='[SUMMARY_MODULE]%(asctime)s %(le
 with open("secret_key.json") as f:  secret_key = json.load(f)
 
 openai.api_key = secret_key['OpenAI']['API_KEY']
-MODEL_NAME = "gpt-3.5-turbo"
+MODEL_NAME = "gpt-4-1106-preview"
 
 def _get_prompt(
         doctor_content: str = None, 
