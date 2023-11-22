@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.exceptions import RequestValidationError
 
+from pydub import AudioSegment
+
 import pandas as pd
 import torch
 
@@ -23,7 +25,7 @@ DUMMY_VIDEO_FILE_NAME = "dummy.webm"
 EXTRACTOR_THRESHOLD = 0.85
 
 app = FastAPI()
-extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='mps')
+extractor = SkeletonExtractor(pretrained_bool=True, number_of_keypoints=17, device='cuda')
 preprocessor = DataPreprocessing()
 metrics = Metrics()
 mmpose_similarity = MMPoseStyleSimilarty()
@@ -47,6 +49,10 @@ async def validation_exception_handler(request, exc):
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):
     return PlainTextResponse(str(exc), status_code=500)
+
+@app.get("/")
+async def root():
+    return {"message": "rehab_ai_server_api_success"}
 
 @app.post("/videoRegister")
 async def registerVideo(
@@ -174,7 +180,7 @@ async def getMetricsConsumer(
     return {"metrics": score}
 
 @app.get("/getSummary")
-async def getSummary(ano: int = Form(), 
+async def getSummary(ano: int, 
                      background_tasks: BackgroundTasks = BackgroundTasks()
     ):
     connector, cursor = database_connector(database_secret_path="secret_key.json")
@@ -198,8 +204,9 @@ async def getSummary(ano: int = Form(),
         doctor_audio = requests.get(doctor_audio_url).content
         patient_audio = requests.get(patient_audio_url).content
 
-        with open("doctor.wav", "wb") as f:     f.write(doctor_audio)
-        with open("patient.wav", "wb") as f:    f.write(patient_audio)
+        with open("doctor.wav", "+wb") as f:     f.write(doctor_audio)
+        with open("patient.wav", "+wb") as f:    f.write(patient_audio)
+        
         doctor_audio, doc_fs = den.load_audio("doctor.wav")
         patient_audio, pat_fs = den.load_audio("patient.wav")
 
@@ -209,12 +216,13 @@ async def getSummary(ano: int = Form(),
             doctor_audio=doctor_audio,
             patient_audio=patient_audio,
             doc_fs=doc_fs,
-            pat_fs=pat_fs
+            pat_fs=pat_fs,
         )
 
         return True
 
     except Exception as e:
+        logging.error("[SUMMARY_MODULE] Error occured while getting audio from database.")
         logging.error(e)
         return False
 
@@ -261,7 +269,7 @@ async def _do_summary(
     summarized = summary.summarize(
         doctor_content=doctor_transcript,
         patient_content=patient_transcript,
-        max_tokens=1024,
+        max_tokens=700,
         verbose=True,
     )
 
@@ -281,3 +289,13 @@ async def _do_summary(
     logging.info("[SUMMARY_MODULE] Summary has been saved in the database.")
     logging.info("[SUMMARY_MODULE] Summary: ")
     logging.info(summarized)
+
+def _hide_seek(obj):
+    class _wrapper:
+        def __init__(self, obj):
+            self.obj = obj
+
+        def read(self, n):
+            return self.obj.read(n)
+
+    return _wrapper(obj)

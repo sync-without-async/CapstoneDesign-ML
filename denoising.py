@@ -16,11 +16,15 @@ def _check_parallel_device_list():
     return device_list
 
 def load_audio(
-        path: str = None
+        path: str = None,
+        verbose: bool = False
     ):
     if path is None:    raise ValueError(f"path argument is required. Excepted: str, but got {path}")
+    if verbose: logging.info(f"Loading audio from {path}...")
 
-    audio, sample_rate = torchaudio.load(path)
+    audio, sample_rate = torchaudio.load(path, format="wav")
+
+    if verbose: logging.info("Done!")
 
     return audio, sample_rate
 
