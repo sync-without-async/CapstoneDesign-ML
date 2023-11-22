@@ -41,7 +41,6 @@ def __feature_extractor(
 
     return transcription
 
-'''
 def speech_to_text_whisper(
         pretrained_model_name_or_path: str = None,
         audio: np.ndarray = None,
@@ -63,18 +62,7 @@ def speech_to_text_whisper(
         logging.info(f"batchsize argument is not provided. Using default value: {batchsize}")
     
     if verbose: logging.info("Loading model...")
-    processor = WhisperProcessor.from_pretrained(pretrained_model_name_or_path)
-    model = WhisperForConditionalGeneration.from_pretrained(pretrained_model_name_or_path).to(device)
 
-    return __feature_extractor(
-        model=model,
-        processor=processor,
-        audio=audio,
-        audio_sample_rate=audio_sample_rate,
-        device=device,
-        verbose=verbose,
-    )
-'''
 
 def speech_to_text(
         processor_pretrained_argument: str = None,

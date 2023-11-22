@@ -122,14 +122,13 @@ class SkeletonExtractor:
             start_time = time.time()
 
             # Cropping the image (YoloV8)
-            get_bounding_box = self.yolov8_model.predict(frame_from_video)[0].boxes.xyxy[0]
+            get_bounding_box = self.yolov8_model.predict(frame_from_video)[0].boxes.xyxy[0].cpu().numpy()
             print(get_bounding_box)
 
             left_top = (get_bounding_box[0], get_bounding_box[1])
             right_top = (get_bounding_box[2], get_bounding_box[1])
             left_bottom = (get_bounding_box[0], get_bounding_box[3])
             right_bottom = (get_bounding_box[2], get_bounding_box[3])
-            cropping_pts = np.array([left_top, right_top, left_bottom, right_bottom])
             
             cropped_image = frame_from_video[int(left_top[1]):int(right_bottom[1]), int(left_top[0]):int(right_bottom[0])]
             cropped_image = cv2.resize(cropped_image, (256, 512))

@@ -5,7 +5,6 @@ import torchaudio
 import torch
 
 import logging
-import io
 
 logging.basicConfig(level=logging.INFO, format='[DSR_MODULE]%(asctime)s %(levelname)s %(message)s')
 

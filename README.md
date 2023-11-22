@@ -2,7 +2,7 @@
 
 This repository is the artificial intelligence repository for the ReHab project. Artificial intelligence is a crucial element in the project, as it provides essential services and methods for guiding users in performing exercises. Through artificial intelligence, we offer guidance videos and provide users with a way to perform exercises. We evaluate how well the user is doing by measuring similarity through feature extraction and cosine similarity using the videos provided by the user.
 
-We utilize pre-trained models for our system. The baseline model employs Posenet, and this choice might change based on considerations such as the trade-off between communication overhead and computation overhead.
+We utilize pre-trained models for our system. The baseline model employs YOLOv8, and this choice might change based on considerations such as the trade-off between communication overhead and computation overhead.
 
 Furthermore, we have implemented the patient and doctor counseling feature through WebRTC. You can check out this functionality in the [Backend](https://github.com/sync-without-async/Rehab-BackEnd) and [Frontend](https://github.com/sync-without-async/Rehab-FrontEnd). We've also added an AI capability that summarizes the counseling content. The original repository can be found at [Rehab-Audio](https://github.com/sync-without-async/Rehab-Audio). The feature development is complete, and we have migrated it to this repository.
 
@@ -75,6 +75,12 @@ The `--reload` parameter automatically restarts the server whenever there's a ch
 
 ## Our Model
 
-The `torchvision.models` module in PyTorch provides various pre-trained and state-of-the-art model architectures. Since extracting human poses from images is crucial, we have used the Keypoint RCNN ResNet50 FPN-based model, which is capable of extracting keypoints. Understanding it as a structure comprising Keypoint R-CNN + ResNet50 FPN makes it easier to comprehend.
+We have been using models from `torchvision.models`, specifically opting for the KeyPoint Mask R-CNN ResNet101 Backbone model, which allows keypoint extraction. However, despite the model's good performance, we found that it takes a long time and is challenging to reduce latency for the user. Additionally, we determined that uploading and processing on the Nvidia Jetson Nano is difficult due to the high FLOPs (or MACs).
 
-As mentioned in the [official documentation](https://pytorch.org/vision/stable/models/generated/torchvision.models.detection.keypointrcnn_resnet50_fpn.html#torchvision.models.detection.keypointrcnn_resnet50_fpn), the default weights are from a model trained on the COCO Dataset v1. This model has more parameters compared to legacy models, though GFLOPs are reduced, resulting in an improved performance model.
+To address these challenges and improve performance, we decided to apply a suitable YOLOv8 model to the Edge Device.
+
+[YOLOv8](https://docs.ultralytics.com/) is one of the state-of-the-art (SOTA) models that demonstrates the lowest latency among existing YOLO versions while delivering the highest performance. We judged it to be faster and more accurate than the previously used KeyPoint Mask R-CNN ResNet101 Backbone model. It is trained with the same COCOv1 model as before, containing 17 keypoints.
+
+## Similarity
+
+For similarity measurement, we utilized the example project "just_dance" within the MMPose Library. This project is a kind of game where real-time similarity is assessed between a pre-uploaded dance video and the user's dance video captured through a webcam. Users receive scores based on the similarity, creating a dance scoring game. While this project shares a strikingly similar nature with ours, it differs in being developed as a Jupyter Notebook, allowing testing locally. You can explore this project [here](https://github.com/open-mmlab/mmpose/tree/main/projects/just_dance).

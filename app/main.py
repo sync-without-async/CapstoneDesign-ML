@@ -7,8 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.exceptions import RequestValidationError
 
+from pydub import AudioSegment
+
 import pandas as pd
-import torchaudio
 import torch
 
 import speech_to_text as stt
@@ -203,8 +204,9 @@ async def getSummary(ano: int,
         doctor_audio = requests.get(doctor_audio_url).content
         patient_audio = requests.get(patient_audio_url).content
 
-        with open("doctor.wav", "wb") as f:     f.write(doctor_audio)
-        with open("patient.wav", "wb") as f:    f.write(patient_audio)
+        with open("doctor.wav", "+wb") as f:     f.write(doctor_audio)
+        with open("patient.wav", "+wb") as f:    f.write(patient_audio)
+        
         doctor_audio, doc_fs = den.load_audio("doctor.wav")
         patient_audio, pat_fs = den.load_audio("patient.wav")
 
@@ -220,6 +222,7 @@ async def getSummary(ano: int,
         return True
 
     except Exception as e:
+        logging.error("[SUMMARY_MODULE] Error occured while getting audio from database.")
         logging.error(e)
         return False
 
