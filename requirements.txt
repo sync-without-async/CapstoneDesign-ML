@@ -5,7 +5,7 @@ python-multipart
 scipy
 pandas
 numpy
-mysql-connector-python==8.0.6
+mysql-connector-python==8.0.14
 scikit-video
 
 torch
